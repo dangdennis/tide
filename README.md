@@ -85,6 +85,7 @@ moon prove       # all proof goals pass
 
 ```bash
 moon build          # compile all packages
+moon check          # check all packages, but don't build object files
 moon test           # run all unit tests
 moon prove          # verify proof_assert invariants (requires proof toolchain above)
 moon fmt            # format code
