@@ -1,0 +1,7 @@
+// import {
+//   "dangdennis/tide" @lib,
+// }
+
+options(
+  "is-main": true,
+)
