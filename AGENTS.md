@@ -44,6 +44,11 @@ You can browse and install extra skills here:
 - Run `moon test` to check tests pass. MoonBit supports snapshot testing; when
   changes affect outputs, run `moon test --update` to refresh snapshots.
 
+- Run `moon prove` to verify formal proofs (`proof_requires`, `proof_ensures`,
+  `proof_invariant`). Both `moon prove` and `moon test` must pass before
+  considering a change complete. Run them after every non-trivial edit, not
+  just at the end.
+
 - Prefer `assert_eq` or `assert_true(pattern is Pattern(...))` for results that
   are stable or very unlikely to change. For snapshot tests that record
   structured debugging output, derive `Debug` and use `debug_inspect`, rather
