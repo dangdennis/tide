@@ -22,3 +22,7 @@ license = "Apache-2.0"
 keywords = []
 
 description = ""
+
+import {
+  "moonbitlang/async@0.19.1",
+}
