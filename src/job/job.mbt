@@ -14,7 +14,7 @@ pub(all) enum JobState {
   Retryable
   Discarded
   Cancelled
-} derive(Debug, Eq)
+} derive(Debug, Show, Eq)
 
 pub fn JobState::to_string(self : JobState) -> String {
   match self {

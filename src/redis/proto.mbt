@@ -65,6 +65,7 @@ pub fn decode_resp(
           let items : Array[RespValue] = Array::new(capacity=count)
           let mut cur = next
           for _ in 0..<count {
+            proof_assert(cur > pos && cur <= data.length())
             let (item, item_next) = decode_resp(data, cur)
             items.push(item)
             cur = item_next
@@ -82,6 +83,7 @@ pub fn decode_resp(
 fn read_line(data : String, start : Int) -> (String, Int) raise RedisError {
   let mut i = start
   while i + 1 < data.length() {
+    proof_assert(i >= start && i < data.length())
     if data[i] == '\r' && data[i + 1] == '\n' {
       return (data[start:i].to_owned(), i + 2)
     }

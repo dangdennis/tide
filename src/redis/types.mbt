@@ -1,12 +1,12 @@
 // RESP2 value types. tide uses RESP2 for broad Redis 5+ compatibility.
-pub enum RespValue {
+pub(all) enum RespValue {
   SimpleStr(String)
   SimpleErr(String)
   Integer(Int64)
   BulkStr(String)
   Null
   Array(Array[RespValue])
-} derive(Debug)
+} derive(Debug, Show, Eq)
 
 pub suberror RedisError {
   ConnectionFailed(String)

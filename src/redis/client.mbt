@@ -112,8 +112,11 @@ pub async fn Connection::pipeline(
     e => raise RedisError::IoError("write failed: \{e}")
   }
   let results : Array[RespValue] = Array::new(capacity=cmds.length())
+  let mut i = 0
   for _ in cmds {
+    proof_assert(results.length() == i)
     results.push(self.recv_response())
+    i = i + 1
   }
   results
 }
