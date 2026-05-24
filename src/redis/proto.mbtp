@@ -1,0 +1,11 @@
+predicate valid_pos(data : String, pos : Int) {
+  pos >= 0 && pos < data.length()
+}
+
+predicate made_progress(pos : Int, next : Int, data : String) {
+  next > pos && next <= data.length()
+}
+
+predicate valid_line_parse(start : Int, next : Int, data : String) {
+  next >= start + 2 && next <= data.length()
+}
