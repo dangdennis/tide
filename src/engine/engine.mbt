@@ -2,6 +2,7 @@
 // Only implementation is RedisEngine; the trait isolates queue/executor logic
 // from Redis-specific details and enables test doubles.
 
+///|
 pub(open) trait Engine {
   // Write a new job hash + add to the available sorted set.
   // Populates id, inserted_at, and scheduled_at before persisting.
@@ -12,11 +13,9 @@ pub(open) trait Engine {
 
   // Move up to `limit` jobs from the available sorted set into the delivery
   // stream (move_to_stream.lua), then claim them via XREADGROUP.
-  async fn fetch_jobs(
-    Self,
-    queue~ : String,
-    limit~ : Int,
-  ) -> Array[@job.FetchedJob] raise EngineError
+  async fn fetch_jobs(Self, queue~ : String, limit~ : Int) -> Array[
+    @job.FetchedJob,
+  ] raise EngineError
 
   // XACK + mark hash state "completed".
   async fn complete_job(Self, @job.FetchedJob) -> Unit raise EngineError
@@ -28,15 +27,11 @@ pub(open) trait Engine {
     Self,
     @job.FetchedJob,
     error_msg~ : String,
-    next_scheduled_at~ : Option[Int64],
+    next_scheduled_at~ : Int64?,
   ) -> Unit raise EngineError
 
   // XACK + ZADD to scheduled sorted set. Attempt count unchanged.
-  async fn snooze_job(
-    Self,
-    @job.FetchedJob,
-    scheduled_at~ : Int64,
-  ) -> Unit raise EngineError
+  async fn snooze_job(Self, @job.FetchedJob, scheduled_at~ : Int64) -> Unit raise EngineError
 
   // XACK + mark hash state "discarded" immediately (executor chose Discard).
   async fn discard_job(Self, @job.FetchedJob) -> Unit raise EngineError
@@ -49,11 +44,7 @@ pub(open) trait Engine {
 
   // Delete job hashes + sorted-set entries older than `older_than_ms`.
   // Returns count of pruned jobs.
-  async fn prune_jobs(
-    Self,
-    queue~ : String,
-    older_than_ms~ : Int64,
-  ) -> Int raise EngineError
+  async fn prune_jobs(Self, queue~ : String, older_than_ms~ : Int64) -> Int raise EngineError
 
   // XGROUP CREATE MKSTREAM — idempotent; call once per queue at startup.
   async fn ensure_stream_group(Self, queue~ : String) -> Unit raise EngineError
@@ -62,13 +53,15 @@ pub(open) trait Engine {
   async fn ensure_scripts(Self) -> Unit raise EngineError
 }
 
+///|
 pub suberror EngineError {
   RedisFailure(String)
   JobNotFound(String)
   InvalidJobData(String)
 }
 
-pub impl Show for EngineError with output(self, logger) {
+///|
+pub impl Show for EngineError with fn output(self, logger) {
   match self {
     RedisFailure(msg) => logger.write_string("RedisFailure(\{msg})")
     JobNotFound(id) => logger.write_string("JobNotFound(\{id})")

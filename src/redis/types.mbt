@@ -1,4 +1,5 @@
 // RESP2 value types. tide uses RESP2 for broad Redis 5+ compatibility.
+///|
 pub(all) enum RespValue {
   SimpleStr(String)
   SimpleErr(String)
@@ -6,17 +7,41 @@ pub(all) enum RespValue {
   BulkStr(String)
   Null
   Array(Array[RespValue])
-} derive(Debug, Show, Eq)
+} derive(Debug, Eq)
 
+pub impl Show for RespValue with output(self, logger) {
+  match self {
+    SimpleStr(s) => logger.write_string("SimpleStr(\"\{s}\")")
+    SimpleErr(e) => logger.write_string("SimpleErr(\"\{e}\")")
+    Integer(n) => logger.write_string("Integer(\{n})")
+    BulkStr(s) => logger.write_string("BulkStr(\"\{s}\")")
+    Null => logger.write_string("Null")
+    Array(items) => {
+      logger.write_string("Array([")
+      let mut first = true
+      for item in items {
+        if !first {
+          logger.write_string(", ")
+        }
+        logger.write_object(item)
+        first = false
+      }
+      logger.write_string("])")
+    }
+  }
+}
+
+///|
 pub suberror RedisError {
   ConnectionFailed(String)
   IoError(String)
   ParseError(String)
-  CommandError(String)  // Redis returned a -ERR response
+  CommandError(String) // Redis returned a -ERR response
   PoolExhausted
 }
 
-pub impl Show for RedisError with output(self, logger) {
+///|
+pub impl Show for RedisError with fn output(self, logger) {
   match self {
     ConnectionFailed(msg) => logger.write_string("ConnectionFailed(\{msg})")
     IoError(msg) => logger.write_string("IoError(\{msg})")
@@ -27,6 +52,8 @@ pub impl Show for RedisError with output(self, logger) {
 }
 
 // Unwrap a RespValue as a String, or raise CommandError.
+
+///|
 pub fn RespValue::as_string(self : RespValue) -> String raise RedisError {
   match self {
     SimpleStr(s) | BulkStr(s) => s
@@ -36,6 +63,7 @@ pub fn RespValue::as_string(self : RespValue) -> String raise RedisError {
   }
 }
 
+///|
 pub fn RespValue::as_int(self : RespValue) -> Int64 raise RedisError {
   match self {
     Integer(n) => n
@@ -44,7 +72,10 @@ pub fn RespValue::as_int(self : RespValue) -> Int64 raise RedisError {
   }
 }
 
-pub fn RespValue::as_array(self : RespValue) -> Array[RespValue] raise RedisError {
+///|
+pub fn RespValue::as_array(
+  self : RespValue,
+) -> Array[RespValue] raise RedisError {
   match self {
     Array(arr) => arr
     Null => []
@@ -53,6 +84,7 @@ pub fn RespValue::as_array(self : RespValue) -> Array[RespValue] raise RedisErro
   }
 }
 
+///|
 pub fn RespValue::is_null(self : RespValue) -> Bool {
   match self {
     Null => true

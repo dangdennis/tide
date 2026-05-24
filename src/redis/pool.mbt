@@ -1,12 +1,14 @@
 // Connection pool: fixed-size, borrow/return with async waiting.
 // The pool hands out exclusive ownership of a Connection and reclaims it on return.
 
+///|
 pub struct Pool {
   config : ClientConfig
   max_size : Int
   available : @async.Queue[Connection]
 }
 
+///|
 pub async fn Pool::new(
   config : ClientConfig,
   size : Int,
@@ -17,9 +19,7 @@ pub async fn Pool::new(
   for _ in 0..<size {
     let conn = Connection::open(config)
     // put can raise an unchecked error (queue closed); safe to ignore during init.
-    try {
-      available.put(conn)
-    } catch {
+    available.put(conn) catch {
       _ => ()
     }
   }
@@ -27,6 +27,8 @@ pub async fn Pool::new(
 }
 
 // Borrow a connection; blocks until one becomes available.
+
+///|
 pub async fn Pool::acquire(self : Pool) -> Connection raise RedisError {
   try {
     match self.available.try_get() {
@@ -41,6 +43,8 @@ pub async fn Pool::acquire(self : Pool) -> Connection raise RedisError {
 // Run an async closure with an acquired connection, returning it afterwards.
 // Closes the connection on error (pool shrinks); acceptable for Phase 1.
 // The closure may raise any error (Error); RedisError from acquire() is also propagated.
+
+///|
 pub async fn[T] Pool::with_conn(
   self : Pool,
   f : async (Connection) -> T raise Error,
@@ -49,9 +53,7 @@ pub async fn[T] Pool::with_conn(
   try {
     let v = f(conn)
     // Return connection to pool; ignore put failure (queue full/closed).
-    try {
-      self.available.put(conn)
-    } catch {
+    self.available.put(conn) catch {
       _ => conn.close()
     }
     v

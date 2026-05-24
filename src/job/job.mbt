@@ -6,6 +6,7 @@
 //                            discarded
 //                                ↓
 //                            cancelled
+///|
 pub(all) enum JobState {
   Available
   Scheduled
@@ -14,8 +15,13 @@ pub(all) enum JobState {
   Retryable
   Discarded
   Cancelled
-} derive(Debug, Show, Eq)
+} derive(Debug, Eq)
 
+pub impl Show for JobState with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
 pub fn JobState::to_string(self : JobState) -> String {
   match self {
     Available => "available"
@@ -28,7 +34,8 @@ pub fn JobState::to_string(self : JobState) -> String {
   }
 }
 
-pub fn JobState::from_string(s : String) -> Option[JobState] {
+///|
+pub fn JobState::from_string(s : String) -> JobState? {
   match s {
     "available" => Some(Available)
     "scheduled" => Some(Scheduled)
@@ -41,37 +48,42 @@ pub fn JobState::from_string(s : String) -> Option[JobState] {
   }
 }
 
+///|
 pub(all) struct Job {
   id : String
   queue : String
   worker : String
-  args : String           // JSON-encoded arbitrary payload
-  meta : String           // JSON-encoded plugin metadata (cron: true, etc.)
-  errors : Array[String]  // JSON-encoded error entries per failed attempt
+  args : String // JSON-encoded arbitrary payload
+  meta : String // JSON-encoded plugin metadata (cron: true, etc.)
+  errors : Array[String] // JSON-encoded error entries per failed attempt
   tags : Array[String]
   state : JobState
   attempt : Int
   max_attempts : Int
-  priority : Int          // 0–9; lower number = higher priority
-  inserted_at : Int64     // unix milliseconds
-  scheduled_at : Int64    // unix milliseconds; when the job may run
-  attempted_at : Option[Int64]
-  completed_at : Option[Int64]
-  discarded_at : Option[Int64]
-  cancelled_at : Option[Int64]
+  priority : Int // 0–9; lower number = higher priority
+  inserted_at : Int64 // unix milliseconds
+  scheduled_at : Int64 // unix milliseconds; when the job may run
+  attempted_at : Int64?
+  completed_at : Int64?
+  discarded_at : Int64?
+  cancelled_at : Int64?
   attempted_by : Array[String] // node IDs that attempted this job
 } derive(Debug)
 
 // A job claimed from the Redis Stream. stream_id is needed for XACK.
+
+///|
 pub(all) struct FetchedJob {
   job : Job
   stream_id : String
 } derive(Debug)
 
+///|
 pub fn FetchedJob::new(job : Job, stream_id : String) -> FetchedJob {
   { job, stream_id }
 }
 
+///|
 pub fn Job::new(queue : String, worker : String) -> Job {
   {
     id: "",
@@ -95,34 +107,44 @@ pub fn Job::new(queue : String, worker : String) -> Job {
   }
 }
 
+///|
 pub fn Job::with_args(self : Job, args : String) -> Job {
-  { ..self, args }
+  { ..self, args, }
 }
 
+///|
 pub fn Job::with_meta(self : Job, meta : String) -> Job {
-  { ..self, meta }
+  { ..self, meta, }
 }
 
+///|
 pub fn Job::with_tags(self : Job, tags : Array[String]) -> Job {
-  { ..self, tags }
+  { ..self, tags, }
 }
 
+///|
 pub fn Job::with_max_attempts(self : Job, max_attempts : Int) -> Job {
-  { ..self, max_attempts }
+  { ..self, max_attempts, }
 }
 
 // 0 = highest priority, 9 = lowest
+
+///|
 pub fn Job::with_priority(self : Job, priority : Int) -> Job {
-  { ..self, priority }
+  { ..self, priority, }
 }
 
 // Unix milliseconds when the job should first become runnable.
+
+///|
 pub fn Job::with_scheduled_at(self : Job, scheduled_at : Int64) -> Job {
-  { ..self, scheduled_at }
+  { ..self, scheduled_at, }
 }
 
 // Convert job to Redis HSET field-value pairs.
 // Returns alternating [field, value, field, value, ...].
+
+///|
 pub fn Job::to_hash_fields(self : Job) -> Array[String] {
   let fields : Array[String] = []
   fields.push("id")
@@ -165,7 +187,9 @@ pub fn Job::to_hash_fields(self : Job) -> Array[String] {
 }
 
 // Reconstruct a Job from Redis HGETALL result (flat list of field, value pairs).
-pub fn Job::from_hash_fields(pairs : Array[String]) -> Option[Job] {
+
+///|
+pub fn Job::from_hash_fields(pairs : Array[String]) -> Job? {
   let map : Map[String, String] = Map([])
   let mut i = 0
   while i + 1 < pairs.length() {
@@ -196,7 +220,8 @@ pub fn Job::from_hash_fields(pairs : Array[String]) -> Option[Job] {
     Some(v) => v
     None => return None
   }
-  let max_attempts = match map.get("max_attempts").bind(fn(s) { parse_int(s) }) {
+  let max_attempts = match
+    map.get("max_attempts").bind(fn(s) { parse_int(s) }) {
     Some(v) => v
     None => return None
   }
@@ -204,11 +229,13 @@ pub fn Job::from_hash_fields(pairs : Array[String]) -> Option[Job] {
     Some(v) => v
     None => return None
   }
-  let inserted_at = match map.get("inserted_at").bind(fn(s) { parse_int64(s) }) {
+  let inserted_at = match
+    map.get("inserted_at").bind(fn(s) { parse_int64(s) }) {
     Some(v) => v
     None => return None
   }
-  let scheduled_at = match map.get("scheduled_at").bind(fn(s) { parse_int64(s) }) {
+  let scheduled_at = match
+    map.get("scheduled_at").bind(fn(s) { parse_int64(s) }) {
     Some(v) => v
     None => return None
   }
@@ -230,65 +257,74 @@ pub fn Job::from_hash_fields(pairs : Array[String]) -> Option[Job] {
     completed_at: map.get("completed_at").bind(fn(s) { parse_int64_opt(s) }),
     discarded_at: map.get("discarded_at").bind(fn(s) { parse_int64_opt(s) }),
     cancelled_at: map.get("cancelled_at").bind(fn(s) { parse_int64_opt(s) }),
-    attempted_by: parse_json_string_array(map.get("attempted_by").unwrap_or("[]")),
+    attempted_by: parse_json_string_array(
+      map.get("attempted_by").unwrap_or("[]"),
+    ),
   })
 }
 
 // Compute the sorted-set score for this job.
 // Lower priority integer = higher precedence; earlier scheduled_at = higher precedence.
+
+///|
 pub fn Job::sorted_set_score(self : Job) -> Int64 {
   Int64::from_int(self.priority) * 1_000_000_000_000L + self.scheduled_at
 }
 
 // Default backoff: min(attempt^4 + 15, 86400) seconds, then convert to ms.
+
+///|
 pub fn default_backoff_ms(attempt : Int) -> Int64 {
   let n = attempt * attempt * attempt * attempt + 15
   let secs = if n < 86400 { n } else { 86400 }
   Int64::from_int(secs) * 1000L
 }
 
+///|
 fn json_string_array(arr : Array[String]) -> String {
   let items = arr.map(fn(s) { "\"" + escape_json_string(s) + "\"" })
   "[" + items.join(",") + "]"
 }
 
+///|
 fn parse_json_string_array(_s : String) -> Array[String] {
   // TODO: replace with a proper JSON library when available.
   []
 }
 
+///|
 fn escape_json_string(s : String) -> String {
   s
-    .replace(old="\\", new="\\\\")
-    .replace(old="\"", new="\\\"")
-    .replace(old="\n", new="\\n")
-    .replace(old="\r", new="\\r")
+  .replace(old="\\", new="\\\\")
+  .replace(old="\"", new="\\\"")
+  .replace(old="\n", new="\\n")
+  .replace(old="\r", new="\\r")
 }
 
-fn option_int64_to_string(v : Option[Int64]) -> String {
+///|
+fn option_int64_to_string(v : Int64?) -> String {
   match v {
     Some(n) => n.to_string()
     None => ""
   }
 }
 
-fn parse_int(s : String) -> Option[Int] {
-  try {
-    Some(@string.parse_int(s, base=10))
-  } catch {
+///|
+fn parse_int(s : String) -> Int? {
+  Some(@string.parse_int(s, base=10)) catch {
     _ => None
   }
 }
 
-fn parse_int64(s : String) -> Option[Int64] {
-  try {
-    Some(@string.parse_int64(s, base=10))
-  } catch {
+///|
+fn parse_int64(s : String) -> Int64? {
+  Some(@string.parse_int64(s, base=10)) catch {
     _ => None
   }
 }
 
-fn parse_int64_opt(s : String) -> Option[Int64] {
+///|
+fn parse_int64_opt(s : String) -> Int64? {
   if s.is_empty() {
     None
   } else {

@@ -13,6 +13,7 @@
 // ARGV[1] — number of jobs to move (integer string)
 //
 // Returns: array of job IDs moved into the stream.
+///|
 pub let move_to_stream_script : String =
   #|local count = tonumber(ARGV[1]) or 1
   #|local moved = {}
@@ -43,6 +44,8 @@ pub let move_to_stream_script : String =
 // ARGV[4..N] — alternating hash field, value pairs
 //
 // Returns: "inserted" if the job was new, "exists" if a duplicate was detected.
+
+///|
 pub let unique_insert_script : String =
   #|if redis.call('EXISTS', KEYS[1]) == 1 then
   #|  return 'exists'
@@ -57,11 +60,14 @@ pub let unique_insert_script : String =
   #|return 'inserted'
 
 // Loaded SHAs after SCRIPT LOAD. Created by RedisEngine::ensure_scripts.
+
+///|
 pub struct ScriptShas {
   move_to_stream : String
   unique_insert : String
 }
 
+///|
 pub fn ScriptShas::create(
   move_to_stream : String,
   unique_insert : String,

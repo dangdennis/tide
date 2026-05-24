@@ -3,6 +3,7 @@
 // Encode a Redis command as a RESP2 inline array of bulk strings.
 // e.g. ["SET", "key", "value"] → "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"
 // Byte counts use arg.length() which is correct for ASCII arguments.
+///|
 pub fn encode_command(args : Array[String]) -> String {
   let sb = StringBuilder::new()
   sb.write_string("*")
@@ -20,6 +21,8 @@ pub fn encode_command(args : Array[String]) -> String {
 
 // Decode one RESP2 value from `data` starting at `pos`.
 // Returns (value, next_pos) so callers can chain multiple parses.
+
+///|
 pub fn decode_resp(
   data : String,
   pos : Int,
@@ -65,7 +68,7 @@ pub fn decode_resp(
           let items : Array[RespValue] = Array::new(capacity=count)
           let mut cur = next
           for _ in 0..<count {
-            proof_assert(cur > pos && cur <= data.length())
+            proof_assert cur > pos && cur <= data.length()
             let (item, item_next) = decode_resp(data, cur)
             items.push(item)
             cur = item_next
@@ -80,10 +83,12 @@ pub fn decode_resp(
 }
 
 // Read characters until \r\n; returns (content, pos_after_crlf).
+
+///|
 fn read_line(data : String, start : Int) -> (String, Int) raise RedisError {
   let mut i = start
   while i + 1 < data.length() {
-    proof_assert(i >= start && i < data.length())
+    proof_assert i >= start && i < data.length()
     if data[i] == '\r' && data[i + 1] == '\n' {
       return (data[start:i].to_owned(), i + 2)
     }
@@ -92,18 +97,16 @@ fn read_line(data : String, start : Int) -> (String, Int) raise RedisError {
   raise RedisError::ParseError("no CRLF found starting at pos \{start}")
 }
 
-fn parse_int(s : String) -> Option[Int] {
-  try {
-    Some(@string.parse_int(s, base=10))
-  } catch {
+///|
+fn parse_int(s : String) -> Int? {
+  Some(@string.parse_int(s, base=10)) catch {
     _ => None
   }
 }
 
-fn parse_int64(s : String) -> Option[Int64] {
-  try {
-    Some(@string.parse_int64(s, base=10))
-  } catch {
+///|
+fn parse_int64(s : String) -> Int64? {
+  Some(@string.parse_int64(s, base=10)) catch {
     _ => None
   }
 }
