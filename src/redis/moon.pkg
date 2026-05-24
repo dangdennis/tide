@@ -7,4 +7,9 @@ import {
 
 options(
   "proof-enabled": true,
+  targets: {
+    "client.mbt": [ "native" ],
+    "client_test.mbt": [ "native" ],
+    "pool.mbt": [ "native" ],
+  },
 )

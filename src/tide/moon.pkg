@@ -6,4 +6,7 @@ import {
 
 options(
   "proof-enabled": true,
+  targets: {
+    "tide.mbt": [ "native" ],
+  },
 )

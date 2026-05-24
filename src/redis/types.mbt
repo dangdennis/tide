@@ -1,4 +1,5 @@
 // RESP2 value types. tide uses RESP2 for broad Redis 5+ compatibility.
+
 ///|
 pub(all) enum RespValue {
   SimpleStr(String)
@@ -9,7 +10,8 @@ pub(all) enum RespValue {
   Array(Array[RespValue])
 } derive(Debug, Eq)
 
-pub impl Show for RespValue with output(self, logger) {
+///|
+pub impl Show for RespValue with fn output(self, logger) {
   match self {
     SimpleStr(s) => logger.write_string("SimpleStr(\"\{s}\")")
     SimpleErr(e) => logger.write_string("SimpleErr(\"\{e}\")")

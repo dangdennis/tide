@@ -13,6 +13,7 @@
 // ARGV[1] — number of jobs to move (integer string)
 //
 // Returns: array of job IDs moved into the stream.
+
 ///|
 pub let move_to_stream_script : String =
   #|local count = tonumber(ARGV[1]) or 1

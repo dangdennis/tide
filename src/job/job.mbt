@@ -6,6 +6,7 @@
 //                            discarded
 //                                ↓
 //                            cancelled
+
 ///|
 pub(all) enum JobState {
   Available
@@ -17,7 +18,8 @@ pub(all) enum JobState {
   Cancelled
 } derive(Debug, Eq)
 
-pub impl Show for JobState with output(self, logger) {
+///|
+pub impl Show for JobState with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

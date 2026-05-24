@@ -5,4 +5,8 @@ import {
 
 options(
   "proof-enabled": true,
+  targets: {
+    "redis_engine.mbt": [ "native" ],
+    "engine_wbtest.mbt": [ "native" ],
+  },
 )
