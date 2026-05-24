@@ -1,7 +1,0 @@
-{
-  "import": [
-    "dangdennis/tide/src/job",
-    "dangdennis/tide/src/redis",
-    "dangdennis/tide/src/engine"
-  ]
-}

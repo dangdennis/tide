@@ -1,0 +1,9 @@
+import {
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/redis",
+  "dangdennis/tide/src/engine",
+}
+
+options(
+  "proof-enabled": true,
+)
