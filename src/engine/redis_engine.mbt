@@ -710,7 +710,9 @@ fn generate_job_id() -> String {
   "j\{now_ms()}\{job_seq.val}"
 }
 
+extern "C" fn getpid() -> Int = "getpid"
+
 ///|
 fn generate_node_id() -> String {
-  "node-\{now_ms()}"
+  "node-\{now_ms()}-\{getpid()}"
 }
