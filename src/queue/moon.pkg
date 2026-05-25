@@ -8,9 +8,4 @@ import {
 
 options(
   "proof-enabled": true,
-  targets: {
-    "queue.mbt": [ "native" ],
-    "executor.mbt": [ "native" ],
-    "shutdown.mbt": [ "native" ],
-  },
 )

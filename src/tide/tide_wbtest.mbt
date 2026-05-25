@@ -60,7 +60,7 @@ async test "itest: end-to-end insert → run → perform → complete" {
   let done : Ref[Bool] = Ref(false)
   let cond = @cond_var.Cond()
 
-  instance.register("echo", async fn(_job) {
+  instance.register("echo", fn(_job) {
     done.val = true
     cond.signal()
     @worker.PerformResult::Ok
@@ -106,7 +106,7 @@ async test "itest: unknown worker is discarded" {
   // No worker registered for "ghost" — executor should discard it.
   // We detect completion by polling: the job hash state changes to "discarded".
   // Use a separate known worker to drive the signal.
-  instance.register("probe", async fn(_job) {
+  instance.register("probe", fn(_job) {
     done.val = true
     cond.signal()
     @worker.PerformResult::Ok
@@ -157,35 +157,34 @@ async test "itest: failing worker with attempts remaining transitions to retryab
   let called : Ref[Bool] = Ref(false)
   let cond = @cond_var.Cond()
 
-  instance.register(
-    "failing",
-    async fn(_job) {
-      called.val = true
-      cond.signal()
-      raise Failure::Failure("simulated failure")
-    },
-  )
+  instance.register("failing", _job => {
+    called.val = true
+    cond.signal()
+    raise Failure::Failure("simulated failure")
+  })
 
   // max_attempts=3 so the first failure is retryable, not discarded.
-  let inserted = instance.insert(@job.Job::new(q, "failing").with_max_attempts(3))
-
-  @async.with_task_group(
-    async fn(tg) {
-      tg.spawn_bg(allow_failure=true) <| () => {
-        instance.run() catch { _ => () }
-      }
-      let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
-      instance.stop()
-      assert_true(called.val)
-      let pairs = instance.engine.pool.with_conn(async fn(conn) {
-        conn.hgetall("tide:job:\{inserted.id}")
-      }) catch {
-        _ => []
-      }
-      assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "retryable")
-      assert_eq(get_redis_field(pairs, "attempt").unwrap_or(""), "1")
-    },
+  let inserted = instance.insert(
+    @job.Job::new(q, "failing").with_max_attempts(3),
   )
+
+  @async.with_task_group(async fn(tg) {
+    tg.spawn_bg(allow_failure=true) <| () => {
+      instance.run() catch {
+        _ => ()
+      }
+    }
+    let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
+    instance.stop()
+    assert_true(called.val)
+    let pairs = instance.engine.pool.with_conn(async fn(conn) {
+      conn.hgetall("tide:job:\{inserted.id}")
+    }) catch {
+      _ => []
+    }
+    assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "retryable")
+    assert_eq(get_redis_field(pairs, "attempt").unwrap_or(""), "1")
+  })
 
   e2e_cleanup(instance, q, [inserted.id])
 }
@@ -199,35 +198,32 @@ async test "itest: failing worker with max_attempts=1 is discarded after one fai
   let called : Ref[Bool] = Ref(false)
   let cond = @cond_var.Cond()
 
-  instance.register(
-    "always-fail",
-    async fn(_job) {
-      called.val = true
-      cond.signal()
-      raise Failure::Failure("fatal error")
-    },
-  )
+  instance.register("always-fail", _job => {
+    called.val = true
+    cond.signal()
+    raise Failure::Failure("fatal error")
+  })
 
   let inserted = instance.insert(
     @job.Job::new(q, "always-fail").with_max_attempts(1),
   )
 
-  @async.with_task_group(
-    async fn(tg) {
-      tg.spawn_bg(allow_failure=true) <| () => {
-        instance.run() catch { _ => () }
+  @async.with_task_group(async fn(tg) {
+    tg.spawn_bg(allow_failure=true) <| () => {
+      instance.run() catch {
+        _ => ()
       }
-      let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
-      instance.stop()
-      assert_true(called.val)
-      let pairs = instance.engine.pool.with_conn(async fn(conn) {
-        conn.hgetall("tide:job:\{inserted.id}")
-      }) catch {
-        _ => []
-      }
-      assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "discarded")
-    },
-  )
+    }
+    let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
+    instance.stop()
+    assert_true(called.val)
+    let pairs = instance.engine.pool.with_conn(async fn(conn) {
+      conn.hgetall("tide:job:\{inserted.id}")
+    }) catch {
+      _ => []
+    }
+    assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "discarded")
+  })
 
   e2e_cleanup(instance, q, [inserted.id])
 }
@@ -241,36 +237,33 @@ async test "itest: worker returning Discard transitions job to discarded regardl
   let called : Ref[Bool] = Ref(false)
   let cond = @cond_var.Cond()
 
-  instance.register(
-    "self-discard",
-    async fn(_job) {
-      called.val = true
-      cond.signal()
-      @worker.PerformResult::Discard("intentional")
-    },
-  )
+  instance.register("self-discard", _job => {
+    called.val = true
+    cond.signal()
+    @worker.PerformResult::Discard("intentional")
+  })
 
   // max_attempts=5 to confirm Discard is not attempt-count dependent.
   let inserted = instance.insert(
     @job.Job::new(q, "self-discard").with_max_attempts(5),
   )
 
-  @async.with_task_group(
-    async fn(tg) {
-      tg.spawn_bg(allow_failure=true) <| () => {
-        instance.run() catch { _ => () }
+  @async.with_task_group(async fn(tg) {
+    tg.spawn_bg(allow_failure=true) <| () => {
+      instance.run() catch {
+        _ => ()
       }
-      let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
-      instance.stop()
-      assert_true(called.val)
-      let pairs = instance.engine.pool.with_conn(async fn(conn) {
-        conn.hgetall("tide:job:\{inserted.id}")
-      }) catch {
-        _ => []
-      }
-      assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "discarded")
-    },
-  )
+    }
+    let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
+    instance.stop()
+    assert_true(called.val)
+    let pairs = instance.engine.pool.with_conn(async fn(conn) {
+      conn.hgetall("tide:job:\{inserted.id}")
+    }) catch {
+      _ => []
+    }
+    assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "discarded")
+  })
 
   e2e_cleanup(instance, q, [inserted.id])
 }
@@ -284,7 +277,7 @@ async test "itest: worker returning Snooze transitions job to scheduled" {
   let done : Ref[Bool] = Ref(false)
   let cond = @cond_var.Cond()
 
-  instance.register("lazy", async fn(_job) {
+  instance.register("lazy", _job => {
     done.val = true
     cond.signal()
     @worker.PerformResult::Snooze(60)

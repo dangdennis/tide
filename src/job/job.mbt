@@ -283,9 +283,13 @@ pub fn default_backoff_ms(attempt : Int) -> Int64 {
     86400
   } else {
     let n = attempt * attempt * attempt * attempt + 15
-    if n < 86400 { n } else { 86400 }
+    if n < 86400 {
+      n
+    } else {
+      86400
+    }
   }
-  proof_assert secs >= 15    // lower bound: attempt 0 → 15 s
+  proof_assert secs >= 15 // lower bound: attempt 0 → 15 s
   proof_assert secs <= 86400 // upper bound: capped at 24 h
   Int64::from_int(secs) * 1000L
 }

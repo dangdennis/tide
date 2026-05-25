@@ -6,11 +6,13 @@ import {
   "dangdennis/tide/src/queue",
   "dangdennis/tide/src/plugin",
   "moonbitlang/async",
-  "moonbitlang/async/cond_var",
   "moonbitlang/core/builtin",
 }
 
+import {
+  "moonbitlang/async/cond_var",
+} for "wbtest"
+
 options(
   "proof-enabled": true,
-  targets: { "tide.mbt": [ "native" ], "tide_wbtest.mbt": [ "native" ] },
 )

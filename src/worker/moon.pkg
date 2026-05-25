@@ -4,5 +4,4 @@ import {
 
 options(
   "proof-enabled": true,
-  targets: { "worker.mbt": [ "native" ] },
 )

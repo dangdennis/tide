@@ -476,7 +476,9 @@ async test "itest: fetch_jobs respects FIFO within the same priority" {
   eng.ensure_stream_group(queue=q)
   // Use explicit scheduled_at so the ordering is deterministic.
   let t = 1_000_000L // small fixed timestamp; both jobs share priority 5
-  let ja = eng.insert_job(@job.Job::new(q, "WA").with_priority(5).with_scheduled_at(t))
+  let ja = eng.insert_job(
+    @job.Job::new(q, "WA").with_priority(5).with_scheduled_at(t),
+  )
   let jb = eng.insert_job(
     @job.Job::new(q, "WB").with_priority(5).with_scheduled_at(t + 1000L),
   )
