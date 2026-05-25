@@ -18,10 +18,10 @@
 ///|
 pub(all) struct CronExpr {
   minutes : Array[Bool] // [0..59]
-  hours   : Array[Bool] // [0..23]
-  doms    : Array[Bool] // size 32; index = day (1-31)
-  months  : Array[Bool] // size 13; index = month (1-12)
-  dows    : Array[Bool] // [0..6]; 0=Sun, 6=Sat
+  hours : Array[Bool] // [0..23]
+  doms : Array[Bool] // size 32; index = day (1-31)
+  months : Array[Bool] // size 13; index = month (1-12)
+  dows : Array[Bool] // [0..6]; 0=Sun, 6=Sat
 }
 
 ///|
@@ -39,12 +39,12 @@ pub impl Show for CronError with fn output(self, logger) {
 ///|
 pub fn CronExpr::parse(s : String) -> CronExpr raise CronError {
   let normalized = match s {
-    "@hourly"               => "0 * * * *"
-    "@daily" | "@midnight"  => "0 0 * * *"
-    "@weekly"               => "0 0 * * 0"
-    "@monthly"              => "0 0 1 * *"
+    "@hourly" => "0 * * * *"
+    "@daily" | "@midnight" => "0 0 * * *"
+    "@weekly" => "0 0 * * 0"
+    "@monthly" => "0 0 1 * *"
     "@yearly" | "@annually" => "0 0 1 1 *"
-    other                   => other
+    other => other
   }
   let fields = split_fields(normalized)
   if fields.length() != 5 {
@@ -54,10 +54,10 @@ pub fn CronExpr::parse(s : String) -> CronExpr raise CronError {
   }
   {
     minutes: parse_field(fields[0], 0, 59),
-    hours:   parse_field(fields[1], 0, 23),
-    doms:    parse_field(fields[2], 1, 31),
-    months:  parse_field(fields[3], 1, 12),
-    dows:    parse_field(fields[4], 0, 6),
+    hours: parse_field(fields[1], 0, 23),
+    doms: parse_field(fields[2], 1, 31),
+    months: parse_field(fields[3], 1, 12),
+    dows: parse_field(fields[4], 0, 6),
   }
 }
 
@@ -75,40 +75,44 @@ pub fn CronExpr::matches_ms(self : CronExpr, ts_ms : Int64) -> Bool {
 
 // ── Internal calendar types ───────────────────────────────────────────────────
 
+///|
 priv struct DateTime {
-  minute  : Int // 0–59
-  hour    : Int // 0–23
-  day     : Int // 1–31
-  month   : Int // 1–12
+  minute : Int // 0–59
+  hour : Int // 0–23
+  day : Int // 1–31
+  month : Int // 1–12
   weekday : Int // 0=Sun, 6=Sat
 }
 
 // Convert a Unix millisecond timestamp to calendar components (UTC).
 // Uses Howard Hinnant's civil_from_days algorithm for Gregorian date.
 
+///|
 fn ms_to_datetime(ts_ms : Int64) -> DateTime {
-  let ts_sec  = ts_ms / 1000L
+  let ts_sec = ts_ms / 1000L
   let day_sec = (ts_sec % 86400L).to_int()
-  let hour    = day_sec / 3600
-  let minute  = day_sec % 3600 / 60
-  let days    = (ts_sec / 86400L).to_int()
+  let hour = day_sec / 3600
+  let minute = day_sec % 3600 / 60
+  let days = (ts_sec / 86400L).to_int()
   // Epoch (1970-01-01) was a Thursday → 4 in 0=Sun convention.
-  let weekday = ((days % 7) + 4 + 7) % 7
+  let weekday = (days % 7 + 4 + 7) % 7
   // Hinnant civil_from_days:
-  let z   = days + 719468
+  let z = days + 719468
   let era = (if z >= 0 { z } else { z - 146096 }) / 146097
   let doe = z - era * 146097
   let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
   let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
-  let mp  = (5 * doy + 2) / 153
-  let d   = doy - (153 * mp + 2) / 5 + 1
-  let m   = if mp < 10 { mp + 3 } else { mp - 9 }
+  let mp = (5 * doy + 2) / 153
+  let d = doy - (153 * mp + 2) / 5 + 1
+  let m = if mp < 10 { mp + 3 } else { mp - 9 }
   { minute, hour, day: d, month: m, weekday }
 }
 
 // ── Field parser ──────────────────────────────────────────────────────────────
 
 // Split a cron expression into its 5 whitespace-delimited fields.
+
+///|
 fn split_fields(s : String) -> Array[String] {
   let fields : Array[String] = []
   let len = s.length()
@@ -133,8 +137,10 @@ fn split_fields(s : String) -> Array[String] {
 
 // Parse a single cron field (e.g. "0,15,30,45" or "*/5" or "1-5/2")
 // into a Boolean lookup array indexed by value.
+
+///|
 fn parse_field(
-  s       : String,
+  s : String,
   min_val : Int,
   max_val : Int,
 ) -> Array[Bool] raise CronError {
@@ -158,11 +164,13 @@ fn parse_field(
 }
 
 // Parse one spec token and mark matching positions in `bits`.
+
+///|
 fn parse_spec(
-  part    : String,
+  part : String,
   min_val : Int,
   max_val : Int,
-  bits    : Array[Bool],
+  bits : Array[Bool],
 ) -> Unit raise CronError {
   let len = part.length()
   if len == 0 {
@@ -240,6 +248,8 @@ fn parse_spec(
 
 // Parse an integer starting at position `start`; returns (value, next_pos).
 // s[i] returns UInt16 on the native backend, so use .to_int() for range checks.
+
+///|
 fn parse_int_at(s : String, start : Int) -> (Int, Int)? {
   let len = s.length()
   if start >= len {
@@ -251,16 +261,18 @@ fn parse_int_at(s : String, start : Int) -> (Int, Int)? {
   }
   let mut n = 0
   let mut i = start
-  while i < len && {
-    let d = s[i].to_int()
-    d >= 48 && d <= 57
-  } {
+  while i < len &&
+        ({
+          let d = s[i].to_int()
+          d >= 48 && d <= 57
+        }) {
     n = n * 10 + (s[i].to_int() - 48)
     i = i + 1
   }
   Some((n, i))
 }
 
+///|
 fn parse_single_int(s : String, start : Int) -> Int raise CronError {
   match parse_int_at(s, start) {
     None =>

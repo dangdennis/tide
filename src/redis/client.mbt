@@ -154,7 +154,8 @@ async fn Connection::recv_response(
     }
     match chunk {
       None => raise RedisError::IoError("connection closed by server")
-      Some(bytes) => self.recv_buf = self.recv_buf + @utf8.decode_lossy(bytes[:])
+      Some(bytes) =>
+        self.recv_buf = self.recv_buf + @utf8.decode_lossy(bytes[:])
     }
   }
   raise RedisError::IoError("unexpected recv loop exit")
@@ -440,8 +441,8 @@ pub async fn Connection::publish(
 pub async fn Connection::scan(
   self : Connection,
   cursor : String,
-  match_pattern~ : String = "*",
-  count~ : Int = 100,
+  match_pattern? : String = "*",
+  count? : Int = 100,
 ) -> (String, Array[String]) raise RedisError {
   let resp = self.command([
     "SCAN",

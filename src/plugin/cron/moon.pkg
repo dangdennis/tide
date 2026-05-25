@@ -1,7 +1,4 @@
 options(
   "proof-enabled": true,
-  targets: {
-    "parser.mbt":      ["native"],
-    "parser_test.mbt": ["native"],
-  },
+  targets: { "parser.mbt": [ "native" ], "parser_test.mbt": [ "native" ] },
 )

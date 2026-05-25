@@ -17,12 +17,9 @@ pub async fn execute(
     }
     Some(f) => f
   }
-  let result = try? @async.with_timeout_opt(
-    30000,
-    async fn() { worker_fn(job) },
-  )
+  let result = try? @async.with_timeout_opt(30000, async fn() { worker_fn(job) })
   match result {
-    Err(e) => {
+    Err(e) =>
       if job.attempt + 1 < job.max_attempts {
         let backoff = @job.default_backoff_ms(job.attempt + 1)
         engine.error_job(
@@ -33,8 +30,7 @@ pub async fn execute(
       } else {
         engine.error_job(fetched, error_msg="\{e}", next_scheduled_at=None)
       }
-    }
-    Ok(None) => {
+    Ok(None) =>
       if job.attempt + 1 < job.max_attempts {
         let backoff = @job.default_backoff_ms(job.attempt + 1)
         engine.error_job(
@@ -43,13 +39,8 @@ pub async fn execute(
           next_scheduled_at=Some(@async.now() + backoff),
         )
       } else {
-        engine.error_job(
-          fetched,
-          error_msg="timeout",
-          next_scheduled_at=None,
-        )
+        engine.error_job(fetched, error_msg="timeout", next_scheduled_at=None)
       }
-    }
     Ok(Some(@worker.PerformResult::Ok)) => engine.complete_job(fetched)
     Ok(Some(@worker.PerformResult::Snooze(secs))) =>
       engine.snooze_job(

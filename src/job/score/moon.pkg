@@ -1,0 +1,6 @@
+// Minimal package — no Array or String types — so the Why3 backend
+// can lower every function and the proofs can reference the real code.
+
+options(
+  "proof-enabled": true,
+)

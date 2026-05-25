@@ -270,7 +270,7 @@ pub fn Job::from_hash_fields(pairs : Array[String]) -> Job? {
 
 ///|
 pub fn Job::sorted_set_score(self : Job) -> Int64 {
-  Int64::from_int(self.priority) * 1_000_000_000_000L + self.scheduled_at
+  @score.compute(Int64::from_int(self.priority), self.scheduled_at)
 }
 
 // Default backoff: min(attempt^4 + 15, 86400) seconds, then convert to ms.

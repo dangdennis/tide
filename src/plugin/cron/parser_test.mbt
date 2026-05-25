@@ -15,7 +15,7 @@ test "parse */15 minutes" {
   // Any day, hour — test minute 0, 15, 30, 45 match; 1, 14, 16 do not.
   // Use 2024-01-01 00:00 UTC base (ts=1704067200000)
   let base = 1704067200000L
-  assert_true(expr.matches_ms(base))                // minute 0
+  assert_true(expr.matches_ms(base)) // minute 0
   assert_true(expr.matches_ms(base + 15L * 60000L)) // minute 15
   assert_true(expr.matches_ms(base + 30L * 60000L)) // minute 30
   assert_true(expr.matches_ms(base + 45L * 60000L)) // minute 45
@@ -39,8 +39,8 @@ test "parse range 1-5 in dow" {
   // 2024-03-11 (Monday) 09:00 UTC = 1710147600000
   // 2024-03-15 (Friday) 09:00 UTC = 1710493200000
   // 2024-03-16 (Saturday) 09:00 UTC = 1710579600000
-  assert_true(expr.matches_ms(1710147600000L))  // Monday
-  assert_true(expr.matches_ms(1710493200000L))  // Friday
+  assert_true(expr.matches_ms(1710147600000L)) // Monday
+  assert_true(expr.matches_ms(1710493200000L)) // Friday
   assert_false(expr.matches_ms(1710579600000L)) // Saturday
 }
 

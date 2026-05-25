@@ -2,6 +2,7 @@
 // Requires: docker-compose up -d redis  (Redis on 127.0.0.1:6379)
 // Run:      moon test --target native
 
+///|
 let test_redis_url = "redis://127.0.0.1:6379"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ async test "itest: minimal connection smoke test" {
   conn.close()
 }
 
+///|
 async fn itest_engine() -> RedisEngine raise EngineError {
   let config = @redis.ClientConfig::from_url(test_redis_url) catch {
     e => raise EngineError::RedisFailure("\{e}")
@@ -26,6 +28,8 @@ async fn itest_engine() -> RedisEngine raise EngineError {
 }
 
 // Delete all Redis keys owned by a test queue plus specific job hashes.
+
+///|
 async fn cleanup(
   eng : RedisEngine,
   queue : String,

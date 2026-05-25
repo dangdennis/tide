@@ -11,8 +11,5 @@ import {
 
 options(
   "proof-enabled": true,
-  targets: {
-    "tide.mbt": [ "native" ],
-    "tide_wbtest.mbt": [ "native" ],
-  },
+  targets: { "tide.mbt": [ "native" ], "tide_wbtest.mbt": [ "native" ] },
 )

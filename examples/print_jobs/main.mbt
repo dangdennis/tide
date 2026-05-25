@@ -39,17 +39,14 @@ async fn main {
 
   // ── Register worker ─────────────────────────────────────────────────────────
   // The closure receives the full Job struct; use job.args for your payload.
-  instance.register(
-    "PrintJob",
-    fn(job) {
-      println("[worker] processing job_id=\{job.id}  args=\{job.args}")
-      remaining.val = remaining.val - 1
-      if remaining.val == 0 {
-        all_done.signal()
-      }
-      @worker.PerformResult::Ok
-    },
-  )
+  instance.register("PrintJob", fn(job) {
+    println("[worker] processing job_id=\{job.id}  args=\{job.args}")
+    remaining.val = remaining.val - 1
+    if remaining.val == 0 {
+      all_done.signal()
+    }
+    @worker.PerformResult::Ok
+  })
 
   // ── Enqueue jobs ────────────────────────────────────────────────────────────
   for i in 0..<total {
@@ -65,20 +62,20 @@ async fn main {
   }
 
   // ── Run until all jobs complete (or 10 s timeout) ───────────────────────────
-  @async.with_task_group(
-    async fn(tg) {
-      // Spin up the tide processing loop in the background.
-      tg.spawn_bg(allow_failure=true) <| () => {
-        instance.run() catch { _ => () }
+  @async.with_task_group(async fn(tg) {
+    // Spin up the tide processing loop in the background.
+    tg.spawn_bg(allow_failure=true) <| () => {
+      instance.run() catch {
+        _ => ()
       }
+    }
 
-      // Block until every worker has signalled, or 10 s elapses.
-      let _ = @async.with_timeout_opt(10000, async fn() { all_done.wait() })
+    // Block until every worker has signalled, or 10 s elapses.
+    let _ = @async.with_timeout_opt(10000, async fn() { all_done.wait() })
 
-      instance.stop()
+    instance.stop()
 
-      let done = total - remaining.val
-      println("[main]   finished. \{done}/\{total} jobs completed.")
-    },
-  )
+    let done = total - remaining.val
+    println("[main]   finished. \{done}/\{total} jobs completed.")
+  })
 }

@@ -1,0 +1,84 @@
+// Formal proofs of the priority ordering properties of the score formula.
+//
+// Why3 tooling note: runtime functions (defined in .mbt) cannot be called
+// inside proof annotation bodies — only logic functions (.mbtp) can.
+// Therefore this file contains a logic mirror `score(p, t)` alongside the
+// three ordering lemmas. The mirror must stay formula-identical to
+// `compute(p, t)` in score.mbt; both files live in the same package so
+// any drift is immediately visible in review.
+//
+// Why3 also does not support top-level `let` in .mbtp, so the epoch
+// constant (1_000_000_000_000L) appears as a literal here. It must equal
+// score.mbt::priority_epoch.
+//
+// Three goals are proved:
+//   L1  same_priority_ordering      — earlier scheduled_at always wins among equal-priority jobs
+//   L2  priority_dominates          — lower priority number wins within one epoch gap
+//   L3  score_order_implies_urgency — within one epoch, lower score ↔ more urgent
+
+// ── Logic mirror ─────────────────────────────────────────────────────────────
+
+// Keep identical to compute() in score.mbt.
+fn score(priority : Int64, scheduled_at : Int64) -> Int64 {
+  priority * 1_000_000_000_000L + scheduled_at
+}
+
+// ── Predicates ──────────────────────────────────────────────────────────────
+
+predicate valid_priority(p : Int64) {
+  0L <= p && p <= 9L
+}
+
+predicate more_urgent_or_earlier(
+  p0 : Int64,
+  p1 : Int64,
+  t0 : Int64,
+  t1 : Int64
+) {
+  p0 < p1 || (p0 == p1 && t0 < t1)
+}
+
+// Both timestamps lie within one priority epoch (< 1_000_000_000_000 ms
+// ≈ 31.7 years). Required by L3's converse direction.
+predicate within_epoch(t0 : Int64, t1 : Int64) {
+  0L <= t0 && t0 < 1_000_000_000_000L &&
+  0L <= t1 && t1 < 1_000_000_000_000L
+}
+
+// ── Lemmas ──────────────────────────────────────────────────────────────────
+
+// L1: Same priority — the job scheduled earlier always gets the lower score.
+lemma same_priority_ordering(p : Int64, t0 : Int64, t1 : Int64) where {
+  proof_require: t0 < t1,
+  proof_ensure: score(p, t0) < score(p, t1),
+} {
+}
+
+// L2: Distinct priorities — the more-urgent job (lower number) always wins,
+// provided both scheduled_at values lie within one priority epoch of each other.
+lemma priority_dominates(p0 : Int64, p1 : Int64, t0 : Int64, t1 : Int64) where {
+  proof_require: valid_priority(p0),
+  proof_require: valid_priority(p1),
+  proof_require: 0L <= t0,
+  proof_require: 0L <= t1,
+  proof_require: p0 < p1,
+  proof_require: t0 < (p1 - p0) * 1_000_000_000_000L + t1,
+  proof_ensure: score(p0, t0) < score(p1, t1),
+} {
+}
+
+// L3: Converse — within a single epoch window, lower score implies more urgent
+// or equally urgent but earlier.
+lemma score_order_implies_urgency(
+  p0 : Int64,
+  p1 : Int64,
+  t0 : Int64,
+  t1 : Int64
+) where {
+  proof_require: valid_priority(p0),
+  proof_require: valid_priority(p1),
+  proof_require: within_epoch(t0, t1),
+  proof_require: score(p0, t0) < score(p1, t1),
+  proof_ensure: more_urgent_or_earlier(p0, p1, t0, t1),
+} {
+}

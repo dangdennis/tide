@@ -190,8 +190,7 @@ pub async fn RedisEngine::error_job(
           "errors",
           new_errors,
         ])
-        let score = Int64::from_int(job.priority) * 1_000_000_000_000L +
-          scheduled_at
+        let score = @score.compute(Int64::from_int(job.priority), scheduled_at)
         let _ = conn.zadd(available_key(job.queue), score, job.id)
       }
       None => {
@@ -297,7 +296,7 @@ pub async fn RedisEngine::retry_job(
     None => raise EngineError::JobNotFound(id)
     Some(j) => j
   }
-  let score = Int64::from_int(job.priority) * 1_000_000_000_000L + now
+  let score = @score.compute(Int64::from_int(job.priority), now)
   self.pool.with_conn(async fn(conn) {
     let _ = conn.hset(job_hash_key(id), [
       "state",
@@ -335,7 +334,9 @@ pub async fn RedisEngine::prune_jobs(
         }
         // Only prune terminal states.
         let state = find_field(pairs, "state").unwrap_or("")
-        guard state == "completed" || state == "discarded" || state == "cancelled" else {
+        guard state == "completed" ||
+          state == "discarded" ||
+          state == "cancelled" else {
           continue
         }
         // Pick the timestamp that marks when the job entered its terminal state.
@@ -428,7 +429,7 @@ pub async fn RedisEngine::reclaim_jobs(
       let _ = conn.xack(stream_key(queue), "workers", entry.stream_id)
       match @job.Job::from_hash_fields(pairs) {
         None => () // corrupt / already deleted — PEL entry cleaned up via XACK above
-        Some(job) => {
+        Some(job) =>
           if job.attempt < job.max_attempts {
             let score = job.sorted_set_score()
             let _ = conn.hset(job_hash_key(job_id), [
@@ -446,7 +447,6 @@ pub async fn RedisEngine::reclaim_jobs(
               now.to_string(),
             ])
           }
-        }
       }
     }
     reclaimed
@@ -481,6 +481,7 @@ pub async fn RedisEngine::cron_insert(
 
 // ── String helpers ───────────────────────────────────────────────────────
 
+///|
 fn escape_for_json(s : String) -> String {
   s
   .replace(old="\\", new="\\\\")
@@ -525,6 +526,7 @@ fn find_field(fields : Array[String], name : String) -> String? {
 
 // ── Platform helpers ──────────────────────────────────────────────────────
 
+///|
 let job_seq : Ref[Int64] = Ref(0L)
 
 ///|

@@ -1,5 +1,6 @@
 import {
   "moonbitlang/core/string",
+  "dangdennis/tide/src/job/score",
 }
 
 options(

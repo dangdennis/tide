@@ -4,9 +4,9 @@
 
 ///|
 pub async fn lifeline_tick(
-  engine           : @engine.RedisEngine,
-  queue            : String,
-  rescue_after_ms  : Int64,
+  engine : @engine.RedisEngine,
+  queue : String,
+  rescue_after_ms : Int64,
 ) -> Unit {
   let _ = engine.reclaim_jobs(queue~, rescue_after_ms~) catch { _ => 0 }
   @async.sleep(rescue_after_ms.to_int())

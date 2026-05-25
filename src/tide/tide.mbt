@@ -163,8 +163,8 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
           let tick_ms = current_minute * 60000L
           for entry in entries {
             let _ = @plugin.cron_fire(self.engine, entry, tick_ms) catch {
-                _ => false
-              }
+              _ => false
+            }
           }
         }
         @async.sleep(1000)

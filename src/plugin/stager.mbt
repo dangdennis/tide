@@ -3,10 +3,7 @@
 // scheduled sorted set into the available sorted set.
 
 ///|
-pub async fn stager_tick(
-  engine : @engine.RedisEngine,
-  queue  : String,
-) -> Unit {
+pub async fn stager_tick(engine : @engine.RedisEngine, queue : String) -> Unit {
   let _ = engine.stage_scheduled_jobs(queue~) catch { _ => 0 }
   @async.sleep(1000)
 }

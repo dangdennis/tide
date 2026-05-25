@@ -4,9 +4,9 @@
 
 ///|
 pub async fn pruner_tick(
-  engine      : @engine.RedisEngine,
-  queue       : String,
-  max_age_ms  : Int64,
+  engine : @engine.RedisEngine,
+  queue : String,
+  max_age_ms : Int64,
   interval_ms : Int,
 ) -> Unit {
   let _ = engine.prune_jobs(queue~, older_than_ms=max_age_ms) catch { _ => 0 }

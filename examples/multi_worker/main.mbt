@@ -58,7 +58,7 @@ async fn main {
   // "notifications" queue — two email worker types at different priorities.
   // AlertEmailJob is enqueued at priority=1, so it runs before WelcomeEmailJob
   // even if the welcome jobs were inserted first.
-  instance.register("AlertEmailJob",   fn(job) { finish("AlertEmail  ", job) })
+  instance.register("AlertEmailJob", fn(job) { finish("AlertEmail  ", job) })
   instance.register("WelcomeEmailJob", fn(job) { finish("WelcomeEmail", job) })
 
   // "media" queue — thumbnail resizer.
@@ -101,8 +101,9 @@ async fn main {
 
   // 3 thumbnail jobs.
   for i in 0..<3 {
-    let job = @job.Job::new("media", "ThumbnailJob")
-      .with_args("{\"url\":\"https://cdn.example.com/img/\{i + 1}.jpg\"}")
+    let job = @job.Job::new("media", "ThumbnailJob").with_args(
+      "{\"url\":\"https://cdn.example.com/img/\{i + 1}.jpg\"}",
+    )
     let inserted = instance.insert(job) catch {
       e => {
         println("ERROR: insert failed: \{e}")
@@ -135,21 +136,21 @@ async fn main {
   )
 
   // ── Run until all jobs complete (or 15 s timeout) ────────────────────────
-  @async.with_task_group(
-    async fn(tg) {
-      // Tide processing loop in the background — includes the stager that
-      // will promote the scheduled ReportJobs after 3 s.
-      tg.spawn_bg(allow_failure=true) <| () => {
-        instance.run() catch { _ => () }
+  @async.with_task_group(async fn(tg) {
+    // Tide processing loop in the background — includes the stager that
+    // will promote the scheduled ReportJobs after 3 s.
+    tg.spawn_bg(allow_failure=true) <| () => {
+      instance.run() catch {
+        _ => ()
       }
+    }
 
-      // Block until every worker has signalled, or 15 s elapses.
-      let _ = @async.with_timeout_opt(15000, async fn() { all_done.wait() })
+    // Block until every worker has signalled, or 15 s elapses.
+    let _ = @async.with_timeout_opt(15000, async fn() { all_done.wait() })
 
-      instance.stop()
+    instance.stop()
 
-      let done = total - remaining.val
-      println("[main]   finished. \{done}/\{total} jobs completed.")
-    },
-  )
+    let done = total - remaining.val
+    println("[main]   finished. \{done}/\{total} jobs completed.")
+  })
 }

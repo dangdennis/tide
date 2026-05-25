@@ -7,9 +7,9 @@ import {
 options(
   "proof-enabled": true,
   targets: {
-    "stager.mbt":   ["native"],
-    "lifeline.mbt": ["native"],
-    "pruner.mbt":   ["native"],
-    "cron.mbt":     ["native"],
+    "stager.mbt": [ "native" ],
+    "lifeline.mbt": [ "native" ],
+    "pruner.mbt": [ "native" ],
+    "cron.mbt": [ "native" ],
   },
 )
