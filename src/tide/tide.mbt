@@ -1,7 +1,7 @@
 // Public API surface for tide.
 
 ///|
-pub struct Config {
+pub(all) struct Config {
   redis_url : String
   queues : Map[String, Int] // queue name → concurrency limit
   pool_size : Int
