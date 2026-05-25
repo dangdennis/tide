@@ -37,3 +37,23 @@ test "multiple jobs can be marked cancelled independently" {
   assert_true(n.is_cancelled("b"))
   assert_false(n.is_cancelled("c"))
 }
+
+///|
+test "mark_cancelled evicts oldest entries when cap is exceeded" {
+  let cap = 10000
+  let n = RedisNotifier::new(@redis.ClientConfig::default(), "ch")
+  // Fill to exactly the cap.
+  for i in 0..<cap {
+    n.mark_cancelled("job-\{i}")
+  }
+  assert_true(n.is_cancelled("job-0"))
+  assert_true(n.is_cancelled("job-\{cap - 1}"))
+  // One more push must evict the oldest half.
+  n.mark_cancelled("job-overflow")
+  assert_true(n.is_cancelled("job-overflow"))
+  // The newest half of the original entries must still be present.
+  let keep_from = cap / 2
+  assert_true(n.is_cancelled("job-\{keep_from}"))
+  // The oldest half must be gone.
+  assert_false(n.is_cancelled("job-0"))
+}

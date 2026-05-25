@@ -62,12 +62,12 @@ pub(open) trait Engine {
   ) -> UniqueInsertResult raise EngineError
 
   // Cancel all non-terminal jobs in `queue` that carry `tag`.
-  // Returns the number of jobs cancelled.
+  // Returns the IDs of cancelled jobs (length = count).
   async fn cancel_jobs_by_tag(
     Self,
     queue~ : String,
     tag~ : String,
-  ) -> Int raise EngineError
+  ) -> Array[String] raise EngineError
 
   // Re-enqueue discarded or cancelled jobs in `queue` that carry `tag`.
   // Returns the number of jobs re-enqueued.

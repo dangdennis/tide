@@ -14,6 +14,7 @@ pub(all) struct Config {
   name : String // logical name; used for leader election key
   workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error]
   shutdown_grace_ms : Int // max wait for in-flight jobs on stop (default 15s)
+  job_timeout_ms : Int // per-job execution timeout (default 30 s)
   // Phase 3 plugin settings:
   prune_max_age_ms : Int64? // None = disabled; Some(n) = prune terminal jobs older than n ms
   lifeline_rescue_after_ms : Int64 // reclaim PEL entries idle > this (default 30 s)
@@ -32,6 +33,7 @@ pub fn Config::default() -> Config {
     name: "tide",
     workers: Map([]),
     shutdown_grace_ms: 15000,
+    job_timeout_ms: 30000,
     prune_max_age_ms: None,
     lifeline_rescue_after_ms: 30000L,
     cron_entries: [],
@@ -129,6 +131,7 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
         self.config.workers,
         queue,
         concurrency,
+        self.config.job_timeout_ms,
         self.shutdown,
       )
       // ── Fetch loop ──────────────────────────────────────────────────────
@@ -136,15 +139,25 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
         if runner.shutdown.is_stopped() {
           raise @async.BreakFromSpawnLoop
         }
-        let jobs = runner.fetch_batch()
+        // Fetch up to concurrency jobs.  XREADGROUP blocks up to 1 s if the
+        // stream is empty, giving in-flight jobs time to complete and release
+        // semaphore slots before the next iteration.
+        let jobs = runner.engine.fetch_jobs(
+          queue=runner.queue,
+          limit=runner.concurrency,
+        )
         for fetched in jobs {
           let r = runner
           match self.notifier {
             Some(n) if n.is_cancelled(fetched.job.id) => continue
             _ => ()
           }
+          // Acquire one slot before dispatching.  Blocks (yields) when
+          // concurrency is saturated, letting completed tasks release first.
+          r.sem.acquire()
           tg.spawn_bg(allow_failure=true) <| () => {
-            @queue.execute(r.engine, r.workers, fetched) catch {
+            defer { r.sem.release() }
+            @queue.execute(r.engine, r.workers, fetched, timeout_ms=r.timeout_ms) catch {
               _ => ()
             }
           }
@@ -258,6 +271,8 @@ pub async fn Instance::insert_unique(
 }
 
 // Cancel all non-terminal jobs in `queue` that carry `tag`.
+// Also publishes per-job cancel signals when notify_cancel is enabled,
+// so other nodes' pre-dispatch checks can skip already-cancelled jobs.
 
 ///|
 pub async fn Instance::cancel_by_tag(
@@ -265,9 +280,17 @@ pub async fn Instance::cancel_by_tag(
   queue : String,
   tag : String,
 ) -> Int raise TideError {
-  self.engine.cancel_jobs_by_tag(queue~, tag~) catch {
+  let ids = self.engine.cancel_jobs_by_tag(queue~, tag~) catch {
     e => raise TideError::EngineError("\{e}")
   }
+  match self.notifier {
+    Some(n) =>
+      for id in ids {
+        n.publish_cancel(self.engine.pool, id) catch { _ => () }
+      }
+    None => ()
+  }
+  ids.length()
 }
 
 // Re-enqueue discarded or cancelled jobs in `queue` that carry `tag`.

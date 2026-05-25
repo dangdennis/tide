@@ -502,8 +502,8 @@ async test "itest: cancel_jobs_by_tag cancels available tagged jobs" {
   let j1 = eng.insert_job(@job.Job::new(q, "W").with_tags(["batch"]))
   let j2 = eng.insert_job(@job.Job::new(q, "W").with_tags(["batch"]))
   let j3 = eng.insert_job(@job.Job::new(q, "W").with_tags(["other"]))
-  let count = eng.cancel_jobs_by_tag(queue=q, tag="batch")
-  assert_eq(count, 2)
+  let cancelled = eng.cancel_jobs_by_tag(queue=q, tag="batch")
+  assert_eq(cancelled.length(), 2)
   let pairs1 = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j1.id)) })
   let pairs2 = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j2.id)) })
   let pairs3 = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j3.id)) })
@@ -528,8 +528,8 @@ async test "itest: cancel_jobs_by_tag does not re-stamp already-discarded jobs" 
   let pairs_before = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
   assert_eq(find_field(pairs_before, "state").unwrap_or(""), "discarded")
   // cancel_by_tag must leave the discarded state untouched.
-  let count = eng.cancel_jobs_by_tag(queue=q, tag="x")
-  assert_eq(count, 0)
+  let cancelled = eng.cancel_jobs_by_tag(queue=q, tag="x")
+  assert_eq(cancelled.length(), 0)
   let pairs_after = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
   assert_eq(find_field(pairs_after, "state").unwrap_or(""), "discarded")
   cleanup(eng, q, [j.id])
@@ -548,8 +548,8 @@ async test "itest: cancel_jobs_by_tag does not affect executing jobs" {
   let pairs_exec = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
   assert_eq(find_field(pairs_exec, "state").unwrap_or(""), "executing")
   // cancel_by_tag must not touch an in-flight job.
-  let count = eng.cancel_jobs_by_tag(queue=q, tag="exec-tag")
-  assert_eq(count, 0)
+  let cancelled = eng.cancel_jobs_by_tag(queue=q, tag="exec-tag")
+  assert_eq(cancelled.length(), 0)
   let pairs_after = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
   assert_eq(find_field(pairs_after, "state").unwrap_or(""), "executing")
   // Clean up PEL by completing the job.

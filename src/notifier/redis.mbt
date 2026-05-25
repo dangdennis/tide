@@ -23,11 +23,17 @@
 // Not yet wired — a future tick can publish {"queue":q,"concurrency":n}
 // messages to a separate channel that QueueRunner listens to.
 
+// Max number of cancelled job IDs held in memory.  When this limit is reached,
+// the oldest half are evicted.  Cancel signals are best-effort; eviction only
+// affects jobs cancelled long before the cap was hit.
+let max_cancelled = 10000
+
 ///|
 pub struct RedisNotifier {
   config : @redis.ClientConfig
   channel : String
   cancelled : Ref[Map[String, Bool]] // job_id → true
+  cancelled_ids : Array[String] // insertion-order ring for eviction
 }
 
 ///|
@@ -35,7 +41,7 @@ pub fn RedisNotifier::new(
   config : @redis.ClientConfig,
   channel : String,
 ) -> RedisNotifier {
-  { config, channel, cancelled: Ref(Map([])) }
+  { config, channel, cancelled: Ref(Map([])), cancelled_ids: [] }
 }
 
 ///|
@@ -46,11 +52,31 @@ pub fn RedisNotifier::is_cancelled(self : RedisNotifier, job_id : String) -> Boo
 
 ///|
 /// Record a cancellation locally (used by the listener loop and for testing).
+/// When the in-memory set exceeds `max_cancelled`, the oldest half are evicted.
 pub fn RedisNotifier::mark_cancelled(
   self : RedisNotifier,
   job_id : String,
 ) -> Unit {
+  if self.cancelled.val.contains(job_id) {
+    return
+  }
+  if self.cancelled_ids.length() >= max_cancelled {
+    let keep_from = max_cancelled / 2
+    let new_map : Map[String, Bool] = Map([])
+    let new_ids : Array[String] = []
+    for i in keep_from..<self.cancelled_ids.length() {
+      let id = self.cancelled_ids[i]
+      new_map[id] = true
+      new_ids.push(id)
+    }
+    self.cancelled.val = new_map
+    self.cancelled_ids.clear()
+    for id in new_ids {
+      self.cancelled_ids.push(id)
+    }
+  }
   self.cancelled.val[job_id] = true
+  self.cancelled_ids.push(job_id)
 }
 
 ///|

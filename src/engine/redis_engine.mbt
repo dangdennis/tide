@@ -531,15 +531,15 @@ pub async fn RedisEngine::insert_unique_job(
 ///|
 /// Cancel all non-terminal jobs in `queue` that carry `tag`.
 /// Removes the job from the available and scheduled sorted sets and
-/// marks the hash state as `cancelled`.  Returns the count cancelled.
+/// marks the hash state as `cancelled`.  Returns the IDs of cancelled jobs.
 pub async fn RedisEngine::cancel_jobs_by_tag(
   self : RedisEngine,
   queue~ : String,
   tag~ : String,
-) -> Int raise EngineError {
+) -> Array[String] raise EngineError {
   let now = now_ms()
   self.pool.with_conn(async fn(conn) {
-    let mut count = 0
+    let ids : Array[String] = []
     let mut cursor = "0"
     while true {
       let (next_cursor, keys) = conn.scan(
@@ -575,14 +575,14 @@ pub async fn RedisEngine::cancel_jobs_by_tag(
           "cancelled_at",
           now.to_string(),
         ])
-        count = count + 1
+        ids.push(job.id)
       }
       cursor = next_cursor
       if cursor == "0" {
         break
       }
     }
-    count
+    ids
   }) catch {
     e => raise EngineError::RedisFailure("\{e}")
   }

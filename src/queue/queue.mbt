@@ -8,7 +8,11 @@ pub(all) struct QueueRunner {
   workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error]
   queue : String
   concurrency : Int
+  timeout_ms : Int
   shutdown : ShutdownSignal
+  // Semaphore sized to concurrency: acquire before dispatch, release on completion.
+  // Prevents more than `concurrency` jobs from executing simultaneously.
+  sem : @async.Semaphore
 }
 
 ///|
@@ -17,9 +21,18 @@ pub fn QueueRunner::new(
   workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error],
   queue : String,
   concurrency : Int,
+  timeout_ms : Int,
   shutdown : ShutdownSignal,
 ) -> QueueRunner {
-  { engine, workers, queue, concurrency, shutdown }
+  {
+    engine,
+    workers,
+    queue,
+    concurrency,
+    timeout_ms,
+    shutdown,
+    sem: @async.Semaphore(concurrency),
+  }
 }
 
 // fetch_batch runs one fetch iteration: moves available jobs into the Redis

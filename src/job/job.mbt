@@ -335,6 +335,7 @@ fn parse_json_string_array(s : String) -> Array[String] {
           '\\' => buf.write_char('\\')
           'n' => buf.write_char('\n')
           'r' => buf.write_char('\r')
+          't' => buf.write_char('\t')
           _ => buf.write_string(s[i + 1:i + 2].to_owned())
         }
         i = i + 2
@@ -358,6 +359,7 @@ fn escape_json_string(s : String) -> String {
   .replace_all(old="\"", new="\\\"")
   .replace_all(old="\n", new="\\n")
   .replace_all(old="\r", new="\\r")
+  .replace_all(old="\t", new="\\t")
 }
 
 ///|
