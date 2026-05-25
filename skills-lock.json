@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "moonbit-agent-guide": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-agent-guide/SKILL.md",
+      "computedHash": "a67cf8c9f7ce1c10c2fe6ab1dc69b36aaff8c8d1ee67d039d7d99e9236894890"
+    },
+    "moonbit-c-binding": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-c-binding/SKILL.md",
+      "computedHash": "518fe44cda1cea1358e1aa6ed0544dfa9ff746b3aa36fb3d96206a85525644b5"
+    },
+    "moonbit-extract-spec-test": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-extract-spec-test/SKILL.md",
+      "computedHash": "8c7fe72b7e21c56e8622f8c74024b30346e717d970378b2439192ef46008efb3"
+    },
+    "moonbit-orientation": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-orientation/SKILL.md",
+      "computedHash": "a09b3d046f016875448f8d8b7e25c1e0e878648cb48740252fd110cd05b44e69"
+    },
+    "moonbit-proof": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-proof/SKILL.md",
+      "computedHash": "f6b801471165a6e79434235a7fcaa317092d2eb9b898042c0ca5792cad7c8908"
+    },
+    "moonbit-refactoring": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-refactoring/SKILL.md",
+      "computedHash": "1a20bd55385e0a076b78cf502b0bb957d2c71a3e637055b6653a678c89b1231b"
+    },
+    "moonbit-spec-test-development": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moonbit-spec-test-development/SKILL.md",
+      "computedHash": "1e04453ec47ff2c04bdb37804bfeba3bcfefefb34b58184c9db5156a43b3dd64"
+    },
+    "ocaml2moonbit-migration": {
+      "source": "moonbitlang/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ocaml2moonbit-migration/SKILL.md",
+      "computedHash": "859b8ce6baefeb08a5a387663f2194b1f0b82aa6b6322553157ebd7e16650a37"
+    }
+  }
+}
