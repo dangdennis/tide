@@ -1,0 +1,15 @@
+import {
+  "dangdennis/tide/src/engine",
+  "dangdennis/tide/src/plugin/cron",
+  "moonbitlang/async",
+}
+
+options(
+  "proof-enabled": true,
+  targets: {
+    "stager.mbt":   ["native"],
+    "lifeline.mbt": ["native"],
+    "pruner.mbt":   ["native"],
+    "cron.mbt":     ["native"],
+  },
+)

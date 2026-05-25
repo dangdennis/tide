@@ -297,6 +297,19 @@ pub async fn Connection::zpopmin(
 }
 
 ///|
+pub async fn Connection::zrangebyscore(
+  self : Connection,
+  key : String,
+  min : String,
+  max : String,
+) -> Array[String] raise RedisError {
+  self
+  .command(["ZRANGEBYSCORE", key, min, max])
+  .as_array()
+  .map(fn(v) { v.as_string() catch { _ => "" } })
+}
+
+///|
 pub async fn Connection::xadd(
   self : Connection,
   key : String,
@@ -418,6 +431,36 @@ pub async fn Connection::publish(
   message : String,
 ) -> Int64 raise RedisError {
   self.command(["PUBLISH", channel, message]).as_int()
+}
+
+///|
+/// Iterate over all keys matching `match_pattern` using Redis cursor-based
+/// SCAN. Returns (next_cursor, keys_batch). When next_cursor == "0" a full
+/// iteration is complete.
+pub async fn Connection::scan(
+  self : Connection,
+  cursor : String,
+  match_pattern~ : String = "*",
+  count~ : Int = 100,
+) -> (String, Array[String]) raise RedisError {
+  let resp = self.command([
+    "SCAN",
+    cursor,
+    "MATCH",
+    match_pattern,
+    "COUNT",
+    count.to_string(),
+  ])
+  match resp {
+    Array(parts) if parts.length() == 2 => {
+      let next_cursor = parts[0].as_string()
+      let keys = parts[1]
+        .as_array()
+        .map(fn(v) { v.as_string() catch { _ => "" } })
+      (next_cursor, keys)
+    }
+    _ => raise RedisError::ParseError("unexpected SCAN response")
+  }
 }
 
 // Parse XREADGROUP response: [[stream_key, [[id, [f, v, ...]], ...]]]

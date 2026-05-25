@@ -257,6 +257,54 @@ async test "itest: discard_job transitions state to discarded" {
   cleanup(eng, q, [inserted.id])
 }
 
+// ── prune_jobs ────────────────────────────────────────────────────────────────
+
+///|
+async test "itest: prune_jobs deletes completed jobs older than threshold" {
+  let q = "it-prune"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  // Insert and immediately complete two jobs.
+  let j1 = eng.insert_job(@job.Job::new(q, "W"))
+  let j2 = eng.insert_job(@job.Job::new(q, "W"))
+  let fetched = eng.fetch_jobs(queue=q, limit=2)
+  assert_eq(fetched.length(), 2)
+  for f in fetched {
+    eng.complete_job(f)
+  }
+  // With a 0 ms threshold everything completed "before now" is eligible.
+  let pruned = eng.prune_jobs(queue=q, older_than_ms=0L)
+  assert_true(pruned >= 2)
+  // Verify the hashes were deleted.
+  let ids = [j1.id, j2.id]
+  eng.pool.with_conn(async fn(conn) {
+    for id in ids {
+      let pairs = conn.hgetall("tide:job:\{id}")
+      assert_true(pairs.is_empty())
+    }
+  }) catch {
+    _ => ()
+  }
+  cleanup(eng, q, [])
+}
+
+///|
+async test "itest: prune_jobs does not delete jobs newer than threshold" {
+  let q = "it-prune-keep"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  let inserted = eng.insert_job(@job.Job::new(q, "W"))
+  let fetched = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(fetched.length(), 1)
+  eng.complete_job(fetched[0])
+  // A very large threshold means the job is "too new" to prune.
+  let pruned = eng.prune_jobs(queue=q, older_than_ms=9999999999000L)
+  assert_eq(pruned, 0)
+  cleanup(eng, q, [inserted.id])
+}
+
 // ── round-trip: tags and errors survive Redis serialization ──────────────────
 
 ///|

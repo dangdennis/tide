@@ -2,6 +2,7 @@ import {
   "dangdennis/tide/src/job",
   "dangdennis/tide/src/redis",
   "moonbitlang/async",
+  "moonbitlang/core/string",
 }
 
 options(

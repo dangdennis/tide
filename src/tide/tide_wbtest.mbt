@@ -17,11 +17,10 @@ fn get_redis_field(pairs : Array[String], name : String) -> String? {
 
 fn e2e_config(queue : String) -> Config {
   {
-    redis_url: "redis://127.0.0.1:6379",
+    ..Config::default(),
     queues: Map([(queue, 1)]),
     pool_size: 2,
     name: "tide-e2e",
-    workers: Map([]),
     shutdown_grace_ms: 3000,
   }
 }

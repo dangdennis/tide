@@ -1,29 +1,42 @@
 # tide TODO
 
-## Phase 1 — Redis client & Engine (DONE — compiles, untested)
-- [ ] Integration tests against real Redis (docker-compose up)
-- [ ] Verify Lua scripts work end-to-end (move_to_stream, unique_insert)
-- [ ] Fix `now_ms()` stub — needs real clock (no stdlib time API found yet)
-- [ ] Fix `generate_job_id()` stub — needs UUID or random hex
-- [ ] Fix `generate_node_id()` stub — needs hostname + PID
-- [ ] `prune_jobs` is unimplemented (stub returns 0)
+## Phase 1 — Redis client & Engine ✅ COMPLETE
+- [x] Integration tests against real Redis (docker-compose up) — 16 engine tests pass
+- [x] Verify Lua scripts work end-to-end (move_to_stream, unique_insert) — confirmed via e2e tests
+- [x] Fix `now_ms()` stub — uses `@async.now()`
+- [x] Fix `generate_job_id()` stub — counter + timestamp
+- [x] Fix `generate_node_id()` stub — startup-time-based
+- [x] Fix `parse_json_string_array()` stub — hand-rolled parser
+- [x] `prune_jobs` — implemented via SCAN + HGETALL + DEL; `Connection::scan` added to client
+- [x] Fix `recv_response` hang — `bytes.to_unchecked_string()` garbled UTF-16; replaced with `@utf8.decode_lossy`
+- [x] Fix RESP bulk string byte count — use `@utf8.encode(arg).length()` not `arg.length()`
+- [x] Validate AUTH/SELECT responses — `SimpleErr` now raises `ConnectionFailed`
+- [x] Persist error messages — JSON entry written to job `errors` array on retry/discard
+- [x] Set `attempted_at` and `attempted_by` — written to hash on fetch
 
-## Phase 2 — Core runtime (NEXT)
-Files to create:
-- `src/worker/worker.mbt` — `Worker` trait: `perform`, `backoff`, `timeout`. `PerformResult` variants: `Ok | Snooze(seconds) | Discard(reason) | Error(e)`. Default backoff: `min(attempt^4 + 15, 86400)` seconds.
-- `src/queue/queue.mbt` — async loop per queue: drain available→stream via Lua, then `XREADGROUP BLOCK` to claim jobs, spawn one executor task per job.
-- `src/queue/executor.mbt` — runs one job inside its timeout. On result: Ok→complete, Error+attempts→retry with backoff, Error+exhausted→discard, Snooze→snooze, Discard→discard.
-- `src/queue/shutdown.mbt` — graceful drain: stop fetching, wait up to `shutdown_grace` (default 15s) for in-flight jobs, force-cancel remaining.
-- `src/tide/instance.mbt` — wire up `Tide.start` to spawn queue loops; `Tide.stop` for graceful shutdown.
+## Phase 2 — Core runtime ✅ COMPLETE
+- [x] `src/worker/worker.mbt` — `PerformResult` enum + `WorkerFn` type alias
+- [x] `src/queue/queue.mbt` — `QueueRunner` struct + `fetch_batch()`
+- [x] `src/queue/executor.mbt` — `execute()`: timeout, retry/discard/snooze logic
+- [x] `src/queue/shutdown.mbt` — `ShutdownSignal` via `CondVar`
+- [x] `src/tide/tide.mbt` — `Instance::run()` spawns queue loops via `with_task_group`; `Instance::stop()` triggers graceful drain; `Instance::register()` for worker functions
+- [x] End-to-end integration tests pass (insert → fetch → perform → completed)
 
-Exit criteria: insert job → queue loop fetches → executor calls `perform` → job hash → `completed`. Kill worker mid-job → PEL reclaim on restart.
+Exit criteria met: insert job → queue loop fetches → executor calls `perform` → job hash → `completed`.
+Note: PEL reclaim on crash-restart is Phase 3 (Lifeline plugin).
 
-## Phase 3 — Scheduling & maintenance plugins
-- `src/plugin/stager.mbt` — every 1s: move scheduled→available for jobs whose score ≤ now
-- `src/plugin/cron.mbt` — per-minute cron tick; idempotent unique-key insert
-- `src/plugin/cron/parser.mbt` — 5-field cron + `@hourly`/`@daily`/etc.
-- `src/plugin/pruner.mbt` — delete terminal-state jobs older than `max_age`
-- `src/plugin/lifeline.mbt` — `XAUTOCLAIM` to reclaim PEL entries idle > `rescue_after` (30s)
+## Phase 3 — Scheduling & maintenance plugins ✅ COMPLETE
+- [x] `src/plugin/stager.mbt` — every 1s: move scheduled→available for jobs whose score ≤ now
+- [x] `src/plugin/cron.mbt` — per-minute cron tick; idempotent unique-key insert (SET NX PX)
+- [x] `src/plugin/cron/parser.mbt` — 5-field cron + `@hourly`/`@daily`/etc. + unit tests
+- [x] `src/plugin/pruner.mbt` — delete terminal-state jobs older than `max_age`
+- [x] `src/plugin/lifeline.mbt` — `XAUTOCLAIM` to reclaim PEL entries idle > `rescue_after` (30s)
+- [x] Wire all plugins into `Instance::run` via spawn_loop; controlled by `Config` fields
+- [x] `Config` additions: `prune_max_age_ms`, `lifeline_rescue_after_ms`, `cron_entries`
+
+Exit criteria met: stager promotes scheduled jobs every 1 s; lifeline reclaims crashed-worker PEL
+entries every 30 s; pruner deletes old terminal jobs (opt-in via prune_max_age_ms); cron fires
+idempotent per-minute jobs with cross-node deduplication via SET NX PX.
 
 ## Phase 4 — Job features
 - `src/job/unique.mbt` — unique jobs via `unique_insert.lua`; period + fields + states

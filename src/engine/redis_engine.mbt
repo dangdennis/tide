@@ -312,15 +312,171 @@ pub async fn RedisEngine::retry_job(
 }
 
 ///|
-pub fn RedisEngine::prune_jobs(
+pub async fn RedisEngine::prune_jobs(
   self : RedisEngine,
   queue~ : String,
   older_than_ms~ : Int64,
-) -> Int {
-  // TODO: implement prune scan — scan job hashes in terminal states
-  // older than older_than_ms and delete them.
-  let _ = (self, queue, older_than_ms)
-  0
+) -> Int raise EngineError {
+  let cutoff = now_ms() - older_than_ms
+  self.pool.with_conn(async fn(conn) {
+    let mut pruned = 0
+    let mut cursor = "0"
+    while true {
+      let (next_cursor, keys) = conn.scan(
+        cursor,
+        match_pattern="tide:job:*",
+        count=100,
+      )
+      for key in keys {
+        let pairs = conn.hgetall(key)
+        // Skip jobs not belonging to the requested queue.
+        guard find_field(pairs, "queue") is Some(q) && q == queue else {
+          continue
+        }
+        // Only prune terminal states.
+        let state = find_field(pairs, "state").unwrap_or("")
+        guard state == "completed" || state == "discarded" || state == "cancelled" else {
+          continue
+        }
+        // Pick the timestamp that marks when the job entered its terminal state.
+        let ts_field = match state {
+          "completed" => "completed_at"
+          "discarded" => "discarded_at"
+          _ => "cancelled_at"
+        }
+        let ts = match find_field(pairs, ts_field) {
+          None => 0L
+          Some(s) => @string.parse_int64(s, base=10) catch { _ => 0L }
+        }
+        if ts > 0L && ts < cutoff {
+          let _ = conn.del(key)
+          pruned += 1
+        }
+      }
+      cursor = next_cursor
+      if cursor == "0" {
+        break
+      }
+    }
+    pruned
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+}
+
+// ── Phase 3 maintenance operations ──────────────────────────────────────
+
+///|
+/// Move scheduled jobs whose `scheduled_at ≤ now` into the available sorted
+/// set so queue runners can claim them. Returns the number of jobs promoted.
+pub async fn RedisEngine::stage_scheduled_jobs(
+  self : RedisEngine,
+  queue~ : String,
+) -> Int raise EngineError {
+  let now = now_ms()
+  self.pool.with_conn(async fn(conn) {
+    let ids = conn.zrangebyscore(scheduled_key(queue), "0", now.to_string())
+    for id in ids {
+      let pairs = conn.hgetall(job_hash_key(id))
+      match @job.Job::from_hash_fields(pairs) {
+        None => {
+          // Corrupt hash; remove stale key from sorted set.
+          let _ = conn.zrem(scheduled_key(queue), id)
+        }
+        Some(job) => {
+          let score = job.sorted_set_score()
+          let _ = conn.hset(job_hash_key(id), [
+            "state",
+            @job.JobState::Available.to_string(),
+          ])
+          let _ = conn.zadd(available_key(queue), score, id)
+          let _ = conn.zrem(scheduled_key(queue), id)
+        }
+      }
+    }
+    ids.length()
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+}
+
+///|
+/// Use XAUTOCLAIM to reclaim stream PEL entries idle longer than
+/// `rescue_after_ms`. Jobs that still have attempts remaining are
+/// restored to available; exhausted jobs are discarded.
+pub async fn RedisEngine::reclaim_jobs(
+  self : RedisEngine,
+  queue~ : String,
+  rescue_after_ms~ : Int64,
+) -> Int raise EngineError {
+  let node_id = self.node_id
+  self.pool.with_conn(async fn(conn) {
+    let entries = conn.xautoclaim(
+      stream_key(queue),
+      "workers",
+      "lifeline-\{node_id}",
+      rescue_after_ms,
+    )
+    let mut reclaimed = 0
+    for entry in entries {
+      let job_id = find_field(entry.fields, "job_id").unwrap_or("")
+      if job_id.is_empty() {
+        continue
+      }
+      let pairs = conn.hgetall(job_hash_key(job_id))
+      // Acknowledge the stream entry regardless of what happens next.
+      let _ = conn.xack(stream_key(queue), "workers", entry.stream_id)
+      match @job.Job::from_hash_fields(pairs) {
+        None => () // corrupt / already deleted — PEL entry cleaned up via XACK above
+        Some(job) => {
+          if job.attempt < job.max_attempts {
+            let score = job.sorted_set_score()
+            let _ = conn.hset(job_hash_key(job_id), [
+              "state",
+              @job.JobState::Available.to_string(),
+            ])
+            let _ = conn.zadd(available_key(queue), score, job_id)
+            reclaimed += 1
+          } else {
+            let now = now_ms()
+            let _ = conn.hset(job_hash_key(job_id), [
+              "state",
+              @job.JobState::Discarded.to_string(),
+              "discarded_at",
+              now.to_string(),
+            ])
+          }
+        }
+      }
+    }
+    reclaimed
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+}
+
+///|
+/// Insert a cron job if no job has been inserted for the given
+/// `minute_epoch_ms` yet (idempotent across nodes via SET NX PX).
+/// Returns true if a new job was inserted.
+pub async fn RedisEngine::cron_insert(
+  self : RedisEngine,
+  queue : String,
+  worker : String,
+  args : String,
+  minute_epoch_ms : Int64,
+) -> Bool raise EngineError {
+  let unique_key = "tide:cron:\{queue}:\{worker}:\{minute_epoch_ms}"
+  let set_ok = self.pool.with_conn(async fn(conn) {
+    conn.set_nx_px(unique_key, "1", 65000L)
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+  if set_ok {
+    let job = @job.Job::new(queue, worker).with_args(args)
+    let _ = self.insert_job(job)
+  }
+  set_ok
 }
 
 // ── String helpers ───────────────────────────────────────────────────────
