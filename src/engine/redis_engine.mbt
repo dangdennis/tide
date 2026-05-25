@@ -429,24 +429,36 @@ pub async fn RedisEngine::reclaim_jobs(
       let _ = conn.xack(stream_key(queue), "workers", entry.stream_id)
       match @job.Job::from_hash_fields(pairs) {
         None => () // corrupt / already deleted — PEL entry cleaned up via XACK above
-        Some(job) =>
-          if job.attempt < job.max_attempts {
-            let score = job.sorted_set_score()
-            let _ = conn.hset(job_hash_key(job_id), [
-              "state",
-              @job.JobState::Available.to_string(),
-            ])
-            let _ = conn.zadd(available_key(queue), score, job_id)
-            reclaimed += 1
-          } else {
-            let now = now_ms()
-            let _ = conn.hset(job_hash_key(job_id), [
-              "state",
-              @job.JobState::Discarded.to_string(),
-              "discarded_at",
-              now.to_string(),
-            ])
+        Some(job) => {
+          // Skip terminal states — the job was completed/cancelled/discarded
+          // while it was in the PEL.  The XACK above has already removed the
+          // stream entry; nothing more to do.
+          let is_terminal = match job.state {
+            @job.JobState::Completed
+            | @job.JobState::Cancelled
+            | @job.JobState::Discarded => true
+            _ => false
           }
+          if !is_terminal {
+            if job.attempt < job.max_attempts {
+              let score = job.sorted_set_score()
+              let _ = conn.hset(job_hash_key(job_id), [
+                "state",
+                @job.JobState::Available.to_string(),
+              ])
+              let _ = conn.zadd(available_key(queue), score, job_id)
+              reclaimed += 1
+            } else {
+              let now = now_ms()
+              let _ = conn.hset(job_hash_key(job_id), [
+                "state",
+                @job.JobState::Discarded.to_string(),
+                "discarded_at",
+                now.to_string(),
+              ])
+            }
+          }
+        }
       }
     }
     reclaimed
@@ -543,8 +555,15 @@ pub async fn RedisEngine::cancel_jobs_by_tag(
         }
         guard job.queue == queue else { continue }
         guard @job.job_has_tag(job, tag) else { continue }
+        // Skip already-terminal states and in-flight jobs.  Executing jobs
+        // cannot be safely interrupted here; they live only in the stream PEL
+        // and the worker will still write its result.  Discarded jobs have
+        // already exhausted their attempts and should not be re-stamped.
         let is_terminal = match job.state {
-          @job.JobState::Completed | @job.JobState::Cancelled => true
+          @job.JobState::Completed
+          | @job.JobState::Cancelled
+          | @job.JobState::Discarded
+          | @job.JobState::Executing => true
           _ => false
         }
         guard !is_terminal else { continue }
@@ -607,6 +626,14 @@ pub async fn RedisEngine::retry_jobs_by_tag(
           @job.JobState::Available.to_string(),
           "scheduled_at",
           now.to_string(),
+          // Reset attempt counter so the job gets its full max_attempts again.
+          "attempt",
+          "0",
+          // Clear stale terminal timestamps so audit queries see a clean slate.
+          "discarded_at",
+          "",
+          "cancelled_at",
+          "",
         ])
         let _ = conn.zadd(available_key(queue), score, job.id)
         count = count + 1

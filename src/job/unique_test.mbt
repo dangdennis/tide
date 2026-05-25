@@ -59,3 +59,23 @@ test "UniqueConfig::with_fields overrides the default field list" {
   assert_eq(config.fields.length(), 1)
   assert_eq(config.fields[0], "queue")
 }
+
+///|
+test "compute_unique_key with empty fields produces a bare prefix key" {
+  // Empty fields → key is "tide:unique:" with no segments.
+  // All jobs with this config share the same lock regardless of queue/worker/args.
+  // This is a footgun: document and test the expected (if surprising) behavior.
+  let job = Job::new("q", "W")
+  let config = UniqueConfig::new(60_000L).with_fields([])
+  assert_eq(compute_unique_key(job, config), "tide:unique:")
+}
+
+///|
+test "compute_unique_key with a single field includes only that field" {
+  let j1 = Job::new("qA", "W")
+  let j2 = Job::new("qB", "W")
+  let config = UniqueConfig::new(60_000L).with_fields(["worker"])
+  // Both jobs share the same worker, so the key must be identical.
+  assert_eq(compute_unique_key(j1, config), compute_unique_key(j2, config))
+  assert_eq(compute_unique_key(j1, config), "tide:unique:W")
+}

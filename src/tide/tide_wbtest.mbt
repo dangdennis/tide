@@ -308,3 +308,39 @@ async test "itest: worker returning Snooze transitions job to scheduled" {
 
   e2e_cleanup(instance, q, [inserted.id])
 }
+
+// ── is_leader ─────────────────────────────────────────────────────────────────
+
+///|
+async test "itest: is_leader returns true with default Local peer mode" {
+  let q = "it-is-leader"
+  let instance = Instance::start(e2e_config(q))
+  // Default config has peer_mode = Local → always leader, no Redis election.
+  assert_true(instance.is_leader())
+  e2e_cleanup(instance, q, [])
+}
+
+///|
+async test "itest: is_leader returns true with Redis peer mode on first tick" {
+  let q = "it-is-leader-redis"
+  let config : Config = {
+    ..e2e_config(q),
+    peer_mode: Redis,
+    name: "tide-leader-test",
+  }
+  let instance = Instance::start(config)
+  // Before any tick the node has not yet run the election; leader starts false.
+  // After calling tick explicitly it should win (only one node).
+  match instance.peer {
+    None => abort("expected Some(peer) for Redis peer mode")
+    Some(p) => p.tick()
+  }
+  assert_true(instance.is_leader())
+  // Clean up election key.
+  instance.engine.pool.with_conn(async fn(conn) {
+    let _ = conn.del("tide:peer:tide-leader-test")
+  }) catch {
+    _ => ()
+  }
+  e2e_cleanup(instance, q, [])
+}

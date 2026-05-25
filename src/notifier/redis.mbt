@@ -11,7 +11,12 @@
 //
 // Channel layout
 // ──────────────
-//   tide:notify:{queue}   — cancel signals; message body = job ID
+//   tide:notify:{name}   — cancel signals scoped to the instance name;
+//                          message body = job ID.
+//                          All nodes in the same cluster must use the same
+//                          Config.name so they publish/subscribe on the same
+//                          channel.  Cancel signals are instance-wide, not
+//                          per-queue.
 //
 // Concurrency scaling
 // ───────────────────
