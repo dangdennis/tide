@@ -13,6 +13,10 @@ name = "dangdennis/tide"
 
 version = "0.1.0"
 
+preferred_target = "native"
+
+supported_targets = ["native"]
+
 readme = "README.mbt.md"
 
 repository = ""
@@ -24,6 +28,5 @@ keywords = [ ]
 description = ""
 
 import {
-  "moonbitlang/async@0.19.1",
   "moonbitlang/async@0.19.1",
 }

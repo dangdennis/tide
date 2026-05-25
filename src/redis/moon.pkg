@@ -12,5 +12,10 @@ options(
     "client.mbt": [ "native" ],
     "client_test.mbt": [ "native" ],
     "pool.mbt": [ "native" ],
+    "proto.mbt": [ "native" ],
+    "proto_test.mbt": [ "native" ],
+    "scripts.mbt": [ "native" ],
+    "types.mbt": [ "native" ],
+    "types_test.mbt": [ "native" ],
   },
 )
