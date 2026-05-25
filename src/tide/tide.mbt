@@ -1,6 +1,12 @@
 // Public API surface for tide.
 
 ///|
+pub(all) enum PeerMode {
+  Local // single-node; always the leader, no Redis election
+  Redis // multi-node; leader election via SET NX PX
+} derive(Debug)
+
+///|
 pub(all) struct Config {
   redis_url : String
   queues : Map[String, Int] // queue name → concurrency limit
@@ -12,6 +18,9 @@ pub(all) struct Config {
   prune_max_age_ms : Int64? // None = disabled; Some(n) = prune terminal jobs older than n ms
   lifeline_rescue_after_ms : Int64 // reclaim PEL entries idle > this (default 30 s)
   cron_entries : Array[@plugin.CronEntry] // zero or more cron-scheduled jobs
+  // Phase 5 multi-node coordination:
+  peer_mode : PeerMode // Local (default) or Redis for multi-node election
+  notify_cancel : Bool // true = enable pub/sub cancel-signal propagation
 }
 
 ///|
@@ -26,6 +35,8 @@ pub fn Config::default() -> Config {
     prune_max_age_ms: None,
     lifeline_rescue_after_ms: 30000L,
     cron_entries: [],
+    peer_mode: Local,
+    notify_cancel: false,
   }
 }
 
@@ -36,6 +47,8 @@ pub struct Instance {
   engine : @engine.RedisEngine
   config : Config
   shutdown : @queue.ShutdownSignal
+  peer : @peer.RedisPeer? // None when peer_mode = Local
+  notifier : @notifier.RedisNotifier? // None when notify_cancel = false
 }
 
 ///|
@@ -51,7 +64,22 @@ pub async fn Instance::start(config : Config) -> Instance raise TideError {
       e => raise TideError::EngineError("\{e}")
     }
   }
-  { engine, config, shutdown: @queue.ShutdownSignal::new() }
+  let peer : @peer.RedisPeer? = match config.peer_mode {
+    Local => None
+    Redis =>
+      Some(@peer.RedisPeer::new(engine.pool, config.name, engine.node_id))
+  }
+  let notifier : @notifier.RedisNotifier? = if config.notify_cancel {
+    Some(
+      @notifier.RedisNotifier::new(
+        redis_config,
+        "tide:notify:\{config.name}",
+      ),
+    )
+  } else {
+    None
+  }
+  { engine, config, shutdown: @queue.ShutdownSignal::new(), peer, notifier }
 }
 
 // Register a worker function under a name that matches Job::worker.
@@ -111,6 +139,10 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
         let jobs = runner.fetch_batch()
         for fetched in jobs {
           let r = runner
+          match self.notifier {
+            Some(n) if n.is_cancelled(fetched.job.id) => continue
+            _ => ()
+          }
           tg.spawn_bg(allow_failure=true) <| () => {
             @queue.execute(r.engine, r.workers, fetched) catch {
               _ => ()
@@ -145,6 +177,26 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
             }
             @plugin.pruner_tick(self.engine, q, age, 60000)
           }
+        }
+      }
+    }
+    // ── Peer: leader election renewal ──────────────────────────────────────
+    match self.peer {
+      None => ()
+      Some(p) => {
+        let stopped = self.shutdown
+        tg.spawn_bg(allow_failure=true) <| () => {
+          p.run(fn() { stopped.is_stopped() })
+        }
+      }
+    }
+    // ── Notifier: cancel-signal listener ───────────────────────────────────
+    match self.notifier {
+      None => ()
+      Some(n) => {
+        let stopped = self.shutdown
+        tg.spawn_bg(allow_failure=true) <| () => {
+          n.listen(fn() { stopped.is_stopped() })
         }
       }
     }
@@ -228,6 +280,17 @@ pub async fn Instance::retry_by_tag(
 ) -> Int raise TideError {
   self.engine.retry_jobs_by_tag(queue~, tag~) catch {
     e => raise TideError::EngineError("\{e}")
+  }
+}
+
+// Returns true if this node is the current leader.
+// Always true when peer_mode = Local; reflects Redis election otherwise.
+
+///|
+pub fn Instance::is_leader(self : Instance) -> Bool {
+  match self.peer {
+    None => true
+    Some(p) => p.is_leader()
   }
 }
 

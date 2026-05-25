@@ -5,6 +5,8 @@ import {
   "dangdennis/tide/src/worker",
   "dangdennis/tide/src/queue",
   "dangdennis/tide/src/plugin",
+  "dangdennis/tide/src/peer",
+  "dangdennis/tide/src/notifier",
   "moonbitlang/async",
   "moonbitlang/core/builtin",
 }

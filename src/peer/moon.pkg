@@ -1,0 +1,8 @@
+import {
+  "dangdennis/tide/src/redis",
+  "moonbitlang/async",
+}
+
+options(
+  "proof-enabled": true,
+)

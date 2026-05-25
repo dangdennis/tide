@@ -46,10 +46,13 @@ idempotent per-minute jobs with cross-node deduplication via SET NX PX.
 
 Exit criteria met: unique jobs atomically deduplicated via Lua script; named priority constants with clamping; tag-based bulk cancel/retry through Redis SCAN; flat-JSON meta helpers for arbitrary metadata.
 
-## Phase 5 — Multi-node coordination
-- `src/peer/redis.mbt` — leader election: `SET tide:peer:{name} {node_id} NX PX 30000`, renewed every 15s
-- `src/peer/local.mbt` — single-node stub (always leader)
-- `src/notifier/redis.mbt` — optional pub/sub for cancel signals and concurrency scaling
+## Phase 5 — Multi-node coordination ✅ COMPLETE
+- [x] `src/peer/redis.mbt` — leader election: `SET tide:peer:{name} {node_id} NX PX 30000`, renewed every 15s
+- [x] `src/peer/local.mbt` — single-node stub (always leader)
+- [x] `src/notifier/redis.mbt` — optional pub/sub for cancel signals and concurrency scaling
+- [x] `src/tide/tide.mbt` — `PeerMode` enum; `Config.peer_mode` + `Config.notify_cancel`; `Instance.peer` + `Instance.notifier`; peer renewal loop + notifier listener spawned in `run()`; cancel check before job dispatch; `Instance::is_leader()`
+
+Exit criteria met: single-node mode requires no config change (Local peer, notify_cancel=false); Redis mode runs election every 15 s with 30 s TTL; cancel signals propagate via pub/sub to all nodes; pre-dispatch cancel check prevents executing already-cancelled jobs.
 
 ## Phase 6 — Transactional outbox
 - `src/outbox/postgres.mbt` — `INSERT INTO tide_outbox` within caller's transaction
@@ -63,7 +66,9 @@ Exit criteria met: unique jobs atomically deduplicated via Lua script; named pri
 - `src/testing/helpers.mbt` — `assert_enqueued`, `drain_queue`, `perform_inline`
 - `src/testing/sandbox.mbt` — in-memory engine for unit tests (no Redis)
 
-## Phase 8 — Post-1.0
+## Phase 8 - Dashboard
+
+## Phase 9 — Post-1.0
 - Workflows (DAG of jobs)
 - Batches (group + on_complete callbacks)
 - Rate limiting (token bucket via Lua)

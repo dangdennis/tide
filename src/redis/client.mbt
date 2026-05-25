@@ -435,6 +435,74 @@ pub async fn Connection::publish(
 }
 
 ///|
+/// Put the connection into subscribe mode for the given channels.
+/// After this call the connection can only be used with `read_pub_message`;
+/// ordinary commands will not work until the connection is closed.
+pub async fn Connection::subscribe(
+  self : Connection,
+  channels : Array[String],
+) -> Unit raise RedisError {
+  let args : Array[String] = ["SUBSCRIBE"]
+  args.append(channels)
+  let frame = encode_command(args)
+  self.socket.write(frame) catch {
+    e => raise RedisError::IoError("subscribe write: \{e}")
+  }
+  // Consume one subscription confirmation per channel.
+  for _ in channels {
+    let _ = self.recv_response()
+  }
+}
+
+///|
+/// Read the next pub/sub message from a subscribed connection.
+/// Skips subscription-confirmation frames and returns only payload messages
+/// as (channel, data).  Blocks until a message arrives or an error occurs.
+pub async fn Connection::read_pub_message(
+  self : Connection,
+) -> (String, String) raise RedisError {
+  while true {
+    let resp = self.recv_response()
+    match extract_pub_message(resp) {
+      Some(pair) => return pair
+      None => () // skip subscription confirmations, pongs, etc.
+    }
+  }
+  raise RedisError::IoError("read_pub_message loop exited unexpectedly")
+}
+
+// Parse a RESP2 pub/sub push notification.
+// Returns Some((channel, data)) for "message" type; None for all other types.
+
+///|
+fn extract_pub_message(resp : RespValue) -> (String, String)? {
+  match resp {
+    Array(parts) => {
+      if parts.length() < 3 {
+        return None
+      }
+      let msg_type = match parts[0] {
+        BulkStr(s) | SimpleStr(s) => s
+        _ => return None
+      }
+      if msg_type != "message" {
+        return None
+      }
+      let channel = match parts[1] {
+        BulkStr(s) | SimpleStr(s) => s
+        _ => ""
+      }
+      let data = match parts[2] {
+        BulkStr(s) | SimpleStr(s) => s
+        _ => ""
+      }
+      Some((channel, data))
+    }
+    _ => None
+  }
+}
+
+///|
 /// Iterate over all keys matching `match_pattern` using Redis cursor-based
 /// SCAN. Returns (next_cursor, keys_batch). When next_cursor == "0" a full
 /// iteration is complete.
