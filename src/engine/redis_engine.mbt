@@ -483,10 +483,10 @@ pub async fn RedisEngine::cron_insert(
 
 fn escape_for_json(s : String) -> String {
   s
-  .replace(old="\\", new="\\\\")
-  .replace(old="\"", new="\\\"")
-  .replace(old="\n", new="\\n")
-  .replace(old="\r", new="\\r")
+  .replace_all(old="\\", new="\\\\")
+  .replace_all(old="\"", new="\\\"")
+  .replace_all(old="\n", new="\\n")
+  .replace_all(old="\r", new="\\r")
 }
 
 // ── Key helpers ──────────────────────────────────────────────────────────

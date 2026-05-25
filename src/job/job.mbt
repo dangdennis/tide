@@ -274,11 +274,19 @@ pub fn Job::sorted_set_score(self : Job) -> Int64 {
 }
 
 // Default backoff: min(attempt^4 + 15, 86400) seconds, then convert to ms.
+// Guard: attempt^4 overflows 32-bit Int for |attempt| >= 216; beyond that
+// the 86400 s cap already applies, so we short-circuit to avoid UB.
 
 ///|
 pub fn default_backoff_ms(attempt : Int) -> Int64 {
-  let n = attempt * attempt * attempt * attempt + 15
-  let secs = if n < 86400 { n } else { 86400 }
+  let secs = if attempt >= 216 || attempt <= -216 {
+    86400
+  } else {
+    let n = attempt * attempt * attempt * attempt + 15
+    if n < 86400 { n } else { 86400 }
+  }
+  proof_assert secs >= 15    // lower bound: attempt 0 → 15 s
+  proof_assert secs <= 86400 // upper bound: capped at 24 h
   Int64::from_int(secs) * 1000L
 }
 
@@ -342,10 +350,10 @@ fn parse_json_string_array(s : String) -> Array[String] {
 ///|
 fn escape_json_string(s : String) -> String {
   s
-  .replace(old="\\", new="\\\\")
-  .replace(old="\"", new="\\\"")
-  .replace(old="\n", new="\\n")
-  .replace(old="\r", new="\\r")
+  .replace_all(old="\\", new="\\\\")
+  .replace_all(old="\"", new="\\\"")
+  .replace_all(old="\n", new="\\n")
+  .replace_all(old="\r", new="\\r")
 }
 
 ///|
