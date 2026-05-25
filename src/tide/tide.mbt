@@ -185,6 +185,52 @@ pub fn Instance::stop(self : Instance) -> Unit {
   self.shutdown.send()
 }
 
+// Insert a job only if no other job with the same uniqueness key currently
+// exists in Redis.  The key is derived from `job` and `config` via
+// @job.compute_unique_key and the lock expires after `config.period_ms`.
+
+///|
+pub async fn Instance::insert_unique(
+  self : Instance,
+  job : @job.Job,
+  config : @job.UniqueConfig,
+) -> @engine.UniqueInsertResult raise TideError {
+  let unique_key = @job.compute_unique_key(job, config)
+  self.engine.insert_unique_job(
+    job,
+    unique_key~,
+    period_ms=config.period_ms,
+  ) catch {
+    e => raise TideError::EngineError("\{e}")
+  }
+}
+
+// Cancel all non-terminal jobs in `queue` that carry `tag`.
+
+///|
+pub async fn Instance::cancel_by_tag(
+  self : Instance,
+  queue : String,
+  tag : String,
+) -> Int raise TideError {
+  self.engine.cancel_jobs_by_tag(queue~, tag~) catch {
+    e => raise TideError::EngineError("\{e}")
+  }
+}
+
+// Re-enqueue discarded or cancelled jobs in `queue` that carry `tag`.
+
+///|
+pub async fn Instance::retry_by_tag(
+  self : Instance,
+  queue : String,
+  tag : String,
+) -> Int raise TideError {
+  self.engine.retry_jobs_by_tag(queue~, tag~) catch {
+    e => raise TideError::EngineError("\{e}")
+  }
+}
+
 ///|
 pub suberror TideError {
   ConfigError(String)

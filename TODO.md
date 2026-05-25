@@ -38,11 +38,13 @@ Exit criteria met: stager promotes scheduled jobs every 1 s; lifeline reclaims c
 entries every 30 s; pruner deletes old terminal jobs (opt-in via prune_max_age_ms); cron fires
 idempotent per-minute jobs with cross-node deduplication via SET NX PX.
 
-## Phase 4 — Job features
-- `src/job/unique.mbt` — unique jobs via `unique_insert.lua`; period + fields + states
-- `src/job/priority.mbt` — 10 levels (0–9); score = priority * 1e12 + scheduled_at_ms
-- `src/job/tags.mbt` — tag-based cancel/retry filtering
-- `src/job/meta.mbt` — arbitrary JSON metadata field
+## Phase 4 — Job features ✅ COMPLETE
+- [x] `src/job/unique.mbt` — `UniqueConfig` struct + `compute_unique_key`; engine: atomic `insert_unique_job` via `unique_insert.lua`; `Instance::insert_unique`
+- [x] `src/job/priority.mbt` — `PRIORITY_*` constants (0–9); `priority_valid`; `with_priority_clamped`
+- [x] `src/job/tags.mbt` — `job_has_tag` + `jobs_with_tag`; engine: `cancel_jobs_by_tag` + `retry_jobs_by_tag`; `Instance::cancel_by_tag` + `retry_by_tag`
+- [x] `src/job/meta.mbt` — `meta_get_string/Bool` + `meta_set_string/Bool` helpers for the flat-JSON meta field
+
+Exit criteria met: unique jobs atomically deduplicated via Lua script; named priority constants with clamping; tag-based bulk cancel/retry through Redis SCAN; flat-JSON meta helpers for arbitrary metadata.
 
 ## Phase 5 — Multi-node coordination
 - `src/peer/redis.mbt` — leader election: `SET tide:peer:{name} {node_id} NX PX 30000`, renewed every 15s

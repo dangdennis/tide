@@ -51,7 +51,39 @@ pub(open) trait Engine {
 
   // SCRIPT LOAD the two Lua scripts. Call before insert_job / fetch_jobs.
   async fn ensure_scripts(Self) -> Unit raise EngineError
+
+  // Insert a job atomically only if `unique_key` doesn't already exist in Redis.
+  // Uses unique_insert.lua for a compare-and-set guarantee across nodes.
+  async fn insert_unique_job(
+    Self,
+    @job.Job,
+    unique_key~ : String,
+    period_ms~ : Int64,
+  ) -> UniqueInsertResult raise EngineError
+
+  // Cancel all non-terminal jobs in `queue` that carry `tag`.
+  // Returns the number of jobs cancelled.
+  async fn cancel_jobs_by_tag(
+    Self,
+    queue~ : String,
+    tag~ : String,
+  ) -> Int raise EngineError
+
+  // Re-enqueue discarded or cancelled jobs in `queue` that carry `tag`.
+  // Returns the number of jobs re-enqueued.
+  async fn retry_jobs_by_tag(
+    Self,
+    queue~ : String,
+    tag~ : String,
+  ) -> Int raise EngineError
 }
+
+///|
+/// Result of an atomic unique-job insertion attempt.
+pub(all) enum UniqueInsertResult {
+  Inserted(@job.Job)
+  AlreadyExists
+} derive(Debug)
 
 ///|
 pub suberror EngineError {

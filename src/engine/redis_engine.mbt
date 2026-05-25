@@ -479,6 +479,149 @@ pub async fn RedisEngine::cron_insert(
   set_ok
 }
 
+// ── Phase 4 job-feature operations ──────────────────────────────────────────
+
+///|
+/// Insert `job` only if `unique_key` does not yet exist in Redis.
+/// Uses the `unique_insert.lua` script for an atomic check-and-set.
+/// Returns `Inserted(job)` when a new job was created or `AlreadyExists`
+/// when another node already holds the lock.
+pub async fn RedisEngine::insert_unique_job(
+  self : RedisEngine,
+  job : @job.Job,
+  unique_key~ : String,
+  period_ms~ : Int64,
+) -> UniqueInsertResult raise EngineError {
+  let now = now_ms()
+  let id = generate_job_id()
+  let scheduled_at = if job.scheduled_at == 0L { now } else { job.scheduled_at }
+  let job = { ..job, id, inserted_at: now, scheduled_at }
+  let score = job.sorted_set_score()
+  let hash_key = job_hash_key(id)
+  let avail_key = available_key(job.queue)
+  let unique_sha = self.shas.unique_insert
+  let result_str = self.pool.with_conn(async fn(conn) {
+    let fields = job.to_hash_fields()
+    let argv : Array[String] = [period_ms.to_string(), id, score.to_string()]
+    argv.append(fields)
+    let resp = conn.evalsha(unique_sha, [unique_key, hash_key, avail_key], argv)
+    resp.as_string()
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+  if result_str == "inserted" {
+    UniqueInsertResult::Inserted(job)
+  } else {
+    UniqueInsertResult::AlreadyExists
+  }
+}
+
+///|
+/// Cancel all non-terminal jobs in `queue` that carry `tag`.
+/// Removes the job from the available and scheduled sorted sets and
+/// marks the hash state as `cancelled`.  Returns the count cancelled.
+pub async fn RedisEngine::cancel_jobs_by_tag(
+  self : RedisEngine,
+  queue~ : String,
+  tag~ : String,
+) -> Int raise EngineError {
+  let now = now_ms()
+  self.pool.with_conn(async fn(conn) {
+    let mut count = 0
+    let mut cursor = "0"
+    while true {
+      let (next_cursor, keys) = conn.scan(
+        cursor,
+        match_pattern="tide:job:*",
+        count=100,
+      )
+      for key in keys {
+        let pairs = conn.hgetall(key)
+        let job = match @job.Job::from_hash_fields(pairs) {
+          None => continue
+          Some(j) => j
+        }
+        guard job.queue == queue else { continue }
+        guard @job.job_has_tag(job, tag) else { continue }
+        let is_terminal = match job.state {
+          @job.JobState::Completed | @job.JobState::Cancelled => true
+          _ => false
+        }
+        guard !is_terminal else { continue }
+        let _ = conn.zrem(available_key(queue), job.id)
+        let _ = conn.zrem(scheduled_key(queue), job.id)
+        let _ = conn.hset(job_hash_key(job.id), [
+          "state",
+          @job.JobState::Cancelled.to_string(),
+          "cancelled_at",
+          now.to_string(),
+        ])
+        count = count + 1
+      }
+      cursor = next_cursor
+      if cursor == "0" {
+        break
+      }
+    }
+    count
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+}
+
+///|
+/// Re-enqueue discarded or cancelled jobs in `queue` that carry `tag`.
+/// Adds the job back to the available sorted set with its original priority.
+/// Returns the count re-enqueued.
+pub async fn RedisEngine::retry_jobs_by_tag(
+  self : RedisEngine,
+  queue~ : String,
+  tag~ : String,
+) -> Int raise EngineError {
+  let now = now_ms()
+  self.pool.with_conn(async fn(conn) {
+    let mut count = 0
+    let mut cursor = "0"
+    while true {
+      let (next_cursor, keys) = conn.scan(
+        cursor,
+        match_pattern="tide:job:*",
+        count=100,
+      )
+      for key in keys {
+        let pairs = conn.hgetall(key)
+        let job = match @job.Job::from_hash_fields(pairs) {
+          None => continue
+          Some(j) => j
+        }
+        guard job.queue == queue else { continue }
+        guard @job.job_has_tag(job, tag) else { continue }
+        let is_retryable = match job.state {
+          @job.JobState::Discarded | @job.JobState::Cancelled => true
+          _ => false
+        }
+        guard is_retryable else { continue }
+        let score = @score.compute(Int64::from_int(job.priority), now)
+        let _ = conn.hset(job_hash_key(job.id), [
+          "state",
+          @job.JobState::Available.to_string(),
+          "scheduled_at",
+          now.to_string(),
+        ])
+        let _ = conn.zadd(available_key(queue), score, job.id)
+        count = count + 1
+      }
+      cursor = next_cursor
+      if cursor == "0" {
+        break
+      }
+    }
+    count
+  }) catch {
+    e => raise EngineError::RedisFailure("\{e}")
+  }
+}
+
 // ── String helpers ───────────────────────────────────────────────────────
 
 ///|
