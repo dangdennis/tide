@@ -1,0 +1,13 @@
+import {
+  "dangdennis/tide/src/tide",
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/worker",
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+}
+
+supported_targets = "+native"
+
+options(
+  "is-main": true,
+)
