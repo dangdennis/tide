@@ -111,6 +111,7 @@ pub async fn RedisEngine::fetch_jobs(
       count=limit,
       block_ms=1000,
     )
+    let now = now_ms()
     let fetched : Array[@job.FetchedJob] = []
     for entry in entries {
       let job_id = find_field(entry.fields, "job_id").unwrap_or("")
@@ -119,7 +120,21 @@ pub async fn RedisEngine::fetch_jobs(
       }
       let pairs = conn.hgetall(job_hash_key(job_id))
       match @job.Job::from_hash_fields(pairs) {
-        Some(job) => fetched.push(@job.FetchedJob::new(job, entry.stream_id))
+        Some(job) => {
+          let new_attempted_by = job.attempted_by + [node_id]
+          let _ = conn.hset(job_hash_key(job_id), [
+            "attempted_at",
+            now.to_string(),
+            "attempted_by",
+            @job.json_string_array(new_attempted_by),
+          ])
+          let updated = {
+            ..job,
+            attempted_at: Some(now),
+            attempted_by: new_attempted_by,
+          }
+          fetched.push(@job.FetchedJob::new(updated, entry.stream_id))
+        }
         None => () // corrupt hash; Lifeline will reclaim PEL entry
       }
     }
@@ -163,7 +178,8 @@ pub async fn RedisEngine::error_job(
     match next_scheduled_at {
       Some(scheduled_at) => {
         let new_attempt = job.attempt + 1
-        let _ = error_msg // TODO: append to errors array in hash
+        let error_entry = "{\"message\":\"\{escape_for_json(error_msg)}\",\"at\":\{now}}"
+        let new_errors = @job.json_string_array(job.errors + [error_entry])
         let _ = conn.hset(job_hash_key(job.id), [
           "state",
           @job.JobState::Retryable.to_string(),
@@ -171,6 +187,8 @@ pub async fn RedisEngine::error_job(
           new_attempt.to_string(),
           "scheduled_at",
           scheduled_at.to_string(),
+          "errors",
+          new_errors,
         ])
         let score = Int64::from_int(job.priority) * 1_000_000_000_000L +
           scheduled_at
@@ -305,6 +323,16 @@ pub fn RedisEngine::prune_jobs(
   0
 }
 
+// ── String helpers ───────────────────────────────────────────────────────
+
+fn escape_for_json(s : String) -> String {
+  s
+  .replace(old="\\", new="\\\\")
+  .replace(old="\"", new="\\\"")
+  .replace(old="\n", new="\\n")
+  .replace(old="\r", new="\\r")
+}
+
 // ── Key helpers ──────────────────────────────────────────────────────────
 
 ///|
@@ -339,22 +367,22 @@ fn find_field(fields : Array[String], name : String) -> String? {
   None
 }
 
-// ── Platform stubs ────────────────────────────────────────────────────────
+// ── Platform helpers ──────────────────────────────────────────────────────
+
+let job_seq : Ref[Int64] = Ref(0L)
 
 ///|
 fn now_ms() -> Int64 {
-  // TODO: use @time.now() or equivalent from the Moonbit standard library.
-  0L
+  @async.now()
 }
 
 ///|
 fn generate_job_id() -> String {
-  // TODO: use a UUID v4 library or a random hex generator.
-  "job-" + now_ms().to_string()
+  job_seq.val = job_seq.val + 1L
+  "j\{now_ms()}\{job_seq.val}"
 }
 
 ///|
 fn generate_node_id() -> String {
-  // TODO: combine hostname + PID + random suffix.
-  "node-" + now_ms().to_string()
+  "node-\{now_ms()}"
 }

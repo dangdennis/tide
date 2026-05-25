@@ -283,15 +283,60 @@ pub fn default_backoff_ms(attempt : Int) -> Int64 {
 }
 
 ///|
-fn json_string_array(arr : Array[String]) -> String {
+pub fn json_string_array(arr : Array[String]) -> String {
   let items = arr.map(fn(s) { "\"" + escape_json_string(s) + "\"" })
   "[" + items.join(",") + "]"
 }
 
 ///|
-fn parse_json_string_array(_s : String) -> Array[String] {
-  // TODO: replace with a proper JSON library when available.
-  []
+fn parse_json_string_array(s : String) -> Array[String] {
+  let result : Array[String] = []
+  let len = s.length()
+  let mut i = 0
+  while i < len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n') {
+    i = i + 1
+  }
+  if i >= len || s[i] != '[' {
+    return result
+  }
+  i = i + 1
+  while i < len {
+    while i < len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n') {
+      i = i + 1
+    }
+    if i >= len || s[i] == ']' {
+      break
+    }
+    if s[i] == ',' {
+      i = i + 1
+      continue
+    }
+    if s[i] != '"' {
+      break
+    }
+    i = i + 1
+    let buf = StringBuilder::new()
+    while i < len && s[i] != '"' {
+      if s[i] == '\\' && i + 1 < len {
+        match s[i + 1] {
+          '"' => buf.write_char('"')
+          '\\' => buf.write_char('\\')
+          'n' => buf.write_char('\n')
+          'r' => buf.write_char('\r')
+          _ => buf.write_string(s[i + 1:i + 2].to_owned())
+        }
+        i = i + 2
+      } else {
+        buf.write_string(s[i:i + 1].to_owned())
+        i = i + 1
+      }
+    }
+    if i < len {
+      i = i + 1
+    }
+    result.push(buf.to_string())
+  }
+  result
 }
 
 ///|

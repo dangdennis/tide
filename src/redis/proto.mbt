@@ -12,7 +12,7 @@ pub fn encode_command(args : Array[String]) -> String {
   sb.write_string("\r\n")
   for arg in args {
     sb.write_string("$")
-    sb.write_string(arg.length().to_string())
+    sb.write_string(@utf8.encode(arg).length().to_string())
     sb.write_string("\r\n")
     sb.write_string(arg)
     sb.write_string("\r\n")

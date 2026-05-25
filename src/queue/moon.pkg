@@ -1,9 +1,7 @@
 import {
   "dangdennis/tide/src/job",
-  "dangdennis/tide/src/redis",
   "dangdennis/tide/src/engine",
   "dangdennis/tide/src/worker",
-  "dangdennis/tide/src/queue",
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
 }
@@ -11,7 +9,8 @@ import {
 options(
   "proof-enabled": true,
   targets: {
-    "tide.mbt": [ "native" ],
-    "tide_wbtest.mbt": [ "native" ],
+    "queue.mbt": [ "native" ],
+    "executor.mbt": [ "native" ],
+    "shutdown.mbt": [ "native" ],
   },
 )

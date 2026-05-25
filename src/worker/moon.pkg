@@ -1,0 +1,8 @@
+import {
+  "dangdennis/tide/src/job",
+}
+
+options(
+  "proof-enabled": true,
+  targets: { "worker.mbt": [ "native" ] },
+)

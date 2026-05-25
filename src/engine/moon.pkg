@@ -1,6 +1,7 @@
 import {
   "dangdennis/tide/src/job",
   "dangdennis/tide/src/redis",
+  "moonbitlang/async",
 }
 
 options(
@@ -8,5 +9,7 @@ options(
   targets: {
     "redis_engine.mbt": [ "native" ],
     "engine_wbtest.mbt": [ "native" ],
+    "redis_engine_wbtest.mbt": [ "native" ],
+    "engine_async_test.mbt": [ "native" ],
   },
 )

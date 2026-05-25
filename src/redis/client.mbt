@@ -72,13 +72,20 @@ pub async fn Connection::open(
   }
   let conn : Connection = { socket, config, recv_buf: "" }
   match config.password {
-    Some(pass) => {
-      let _ = conn.command(["AUTH", pass])
-    }
+    Some(pass) =>
+      match conn.command(["AUTH", pass]) {
+        SimpleErr(msg) =>
+          raise RedisError::ConnectionFailed("AUTH failed: \{msg}")
+        _ => ()
+      }
     None => ()
   }
   if config.db != 0 {
-    let _ = conn.command(["SELECT", config.db.to_string()])
+    match conn.command(["SELECT", config.db.to_string()]) {
+      SimpleErr(msg) =>
+        raise RedisError::ConnectionFailed("SELECT \{config.db} failed: \{msg}")
+      _ => ()
+    }
   }
   conn
 }
@@ -147,7 +154,7 @@ async fn Connection::recv_response(
     }
     match chunk {
       None => raise RedisError::IoError("connection closed by server")
-      Some(bytes) => self.recv_buf = self.recv_buf + bytes.to_unchecked_string()
+      Some(bytes) => self.recv_buf = self.recv_buf + @utf8.decode_lossy(bytes[:])
     }
   }
   raise RedisError::IoError("unexpected recv loop exit")
