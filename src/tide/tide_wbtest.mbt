@@ -146,6 +146,135 @@ async test "itest: unknown worker is discarded" {
   e2e_cleanup(instance, q, [ghost.id, probe.id])
 }
 
+// ── Executor error paths ──────────────────────────────────────────────────────
+
+///|
+async test "itest: failing worker with attempts remaining transitions to retryable" {
+  let q = "it-e2e-retry"
+  let instance = Instance::start(e2e_config(q))
+  e2e_cleanup(instance, q, [])
+
+  let called : Ref[Bool] = Ref(false)
+  let cond = @cond_var.Cond()
+
+  instance.register(
+    "failing",
+    async fn(_job) {
+      called.val = true
+      cond.signal()
+      raise Failure::Failure("simulated failure")
+    },
+  )
+
+  // max_attempts=3 so the first failure is retryable, not discarded.
+  let inserted = instance.insert(@job.Job::new(q, "failing").with_max_attempts(3))
+
+  @async.with_task_group(
+    async fn(tg) {
+      tg.spawn_bg(allow_failure=true) <| () => {
+        instance.run() catch { _ => () }
+      }
+      let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
+      instance.stop()
+      assert_true(called.val)
+      let pairs = instance.engine.pool.with_conn(async fn(conn) {
+        conn.hgetall("tide:job:\{inserted.id}")
+      }) catch {
+        _ => []
+      }
+      assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "retryable")
+      assert_eq(get_redis_field(pairs, "attempt").unwrap_or(""), "1")
+    },
+  )
+
+  e2e_cleanup(instance, q, [inserted.id])
+}
+
+///|
+async test "itest: failing worker with max_attempts=1 is discarded after one failure" {
+  let q = "it-e2e-discard-err"
+  let instance = Instance::start(e2e_config(q))
+  e2e_cleanup(instance, q, [])
+
+  let called : Ref[Bool] = Ref(false)
+  let cond = @cond_var.Cond()
+
+  instance.register(
+    "always-fail",
+    async fn(_job) {
+      called.val = true
+      cond.signal()
+      raise Failure::Failure("fatal error")
+    },
+  )
+
+  let inserted = instance.insert(
+    @job.Job::new(q, "always-fail").with_max_attempts(1),
+  )
+
+  @async.with_task_group(
+    async fn(tg) {
+      tg.spawn_bg(allow_failure=true) <| () => {
+        instance.run() catch { _ => () }
+      }
+      let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
+      instance.stop()
+      assert_true(called.val)
+      let pairs = instance.engine.pool.with_conn(async fn(conn) {
+        conn.hgetall("tide:job:\{inserted.id}")
+      }) catch {
+        _ => []
+      }
+      assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "discarded")
+    },
+  )
+
+  e2e_cleanup(instance, q, [inserted.id])
+}
+
+///|
+async test "itest: worker returning Discard transitions job to discarded regardless of attempts" {
+  let q = "it-e2e-discard-result"
+  let instance = Instance::start(e2e_config(q))
+  e2e_cleanup(instance, q, [])
+
+  let called : Ref[Bool] = Ref(false)
+  let cond = @cond_var.Cond()
+
+  instance.register(
+    "self-discard",
+    async fn(_job) {
+      called.val = true
+      cond.signal()
+      @worker.PerformResult::Discard("intentional")
+    },
+  )
+
+  // max_attempts=5 to confirm Discard is not attempt-count dependent.
+  let inserted = instance.insert(
+    @job.Job::new(q, "self-discard").with_max_attempts(5),
+  )
+
+  @async.with_task_group(
+    async fn(tg) {
+      tg.spawn_bg(allow_failure=true) <| () => {
+        instance.run() catch { _ => () }
+      }
+      let _ = @async.with_timeout_opt(5000, async fn() { cond.wait() })
+      instance.stop()
+      assert_true(called.val)
+      let pairs = instance.engine.pool.with_conn(async fn(conn) {
+        conn.hgetall("tide:job:\{inserted.id}")
+      }) catch {
+        _ => []
+      }
+      assert_eq(get_redis_field(pairs, "state").unwrap_or(""), "discarded")
+    },
+  )
+
+  e2e_cleanup(instance, q, [inserted.id])
+}
+
 ///|
 async test "itest: worker returning Snooze transitions job to scheduled" {
   let q = "it-e2e-snooze"

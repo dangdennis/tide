@@ -229,3 +229,33 @@ test "default_backoff_ms grows with attempt" {
   assert_true(default_backoff_ms(3) > default_backoff_ms(2))
   assert_true(default_backoff_ms(5) > default_backoff_ms(4))
 }
+
+///|
+test "default_backoff_ms attempt 17 is below the cap (83536 s)" {
+  // 17^4 + 15 = 83521 + 15 = 83536 < 86400
+  assert_eq(default_backoff_ms(17), 83_536_000L)
+}
+
+///|
+test "default_backoff_ms attempt 18 hits the cap" {
+  // 18^4 + 15 = 104976 + 15 = 104991 > 86400, so capped at 86400 s
+  assert_eq(default_backoff_ms(18), 86_400_000L)
+}
+
+///|
+test "default_backoff_ms overflow guard: attempt 216 returns the cap" {
+  // 216^4 overflows 32-bit Int; the guard short-circuits to 86400 s
+  assert_eq(default_backoff_ms(216), 86_400_000L)
+}
+
+// ── json_string_array output format (public API) ──────────────────────────────
+
+///|
+test "json_string_array produces well-formed JSON array of strings" {
+  assert_eq(json_string_array(["a", "b"]), "[\"a\",\"b\"]")
+}
+
+///|
+test "json_string_array empty array produces empty JSON array" {
+  assert_eq(json_string_array([]), "[]")
+}

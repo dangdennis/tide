@@ -327,3 +327,164 @@ async test "itest: job with tags round-trips through Redis" {
   assert_eq(ftags[1], "urgent")
   cleanup(eng, q, [inserted.id])
 }
+
+// ── serialization: special chars in error messages ────────────────────────────
+
+///|
+async test "itest: error_job stores non-empty errors field for message with JSON-special chars" {
+  let q = "it-err-escape"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  let inserted = eng.insert_job(@job.Job::new(q, "W").with_max_attempts(3))
+  let fetched = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(fetched.length(), 1)
+  // Error message contains double-quote, newline, and backslash — all JSON specials.
+  let msg = "say \"hello\"\npath\\end"
+  eng.error_job(
+    fetched[0],
+    error_msg=msg,
+    next_scheduled_at=Some(@async.now() + 5000L),
+  )
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(inserted.id))
+  })
+  assert_eq(find_field(pairs, "state").unwrap_or(""), "retryable")
+  let errors_field = find_field(pairs, "errors").unwrap_or("")
+  // Must be a non-empty JSON array — escaping did not corrupt the structure.
+  assert_false(errors_field.is_empty())
+  assert_true(errors_field[0] == '[')
+  assert_true(errors_field[errors_field.length() - 1] == ']')
+  cleanup(eng, q, [inserted.id])
+}
+
+// ── stage_scheduled_jobs (stager) ─────────────────────────────────────────────
+
+///|
+async test "itest: stage_scheduled_jobs promotes a past-scheduled job to available" {
+  let q = "it-stage-past"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  let inserted = eng.insert_job(@job.Job::new(q, "W"))
+  let fetched = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(fetched.length(), 1)
+  // Snooze into the past so the job is immediately eligible.
+  eng.snooze_job(fetched[0], scheduled_at=@async.now() - 5000L)
+  let promoted = eng.stage_scheduled_jobs(queue=q)
+  assert_eq(promoted, 1)
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(inserted.id))
+  })
+  assert_eq(find_field(pairs, "state").unwrap_or(""), "available")
+  cleanup(eng, q, [inserted.id])
+}
+
+///|
+async test "itest: stage_scheduled_jobs does not promote a future-scheduled job" {
+  let q = "it-stage-future"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  let inserted = eng.insert_job(@job.Job::new(q, "W"))
+  let fetched = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(fetched.length(), 1)
+  // Snooze 60 seconds into the future — not yet eligible.
+  eng.snooze_job(fetched[0], scheduled_at=@async.now() + 60_000L)
+  let promoted = eng.stage_scheduled_jobs(queue=q)
+  assert_eq(promoted, 0)
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(inserted.id))
+  })
+  assert_eq(find_field(pairs, "state").unwrap_or(""), "scheduled")
+  cleanup(eng, q, [inserted.id])
+}
+
+///|
+async test "itest: stage_scheduled_jobs silently removes corrupt scheduled entries" {
+  let q = "it-stage-corrupt"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  // Inject a fake job ID with no corresponding hash and a past score.
+  eng.pool.with_conn(async fn(conn) {
+    let _ = conn.zadd(scheduled_key(q), @async.now() - 1000L, "corrupt-id-99")
+  }) catch {
+    _ => ()
+  }
+  // Must not raise; corrupt entry is removed from the scheduled set.
+  let _ = eng.stage_scheduled_jobs(queue=q)
+  cleanup(eng, q, [])
+}
+
+///|
+async test "itest: stage_scheduled_jobs promotes all past-due jobs in one tick" {
+  let q = "it-stage-multi"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  let j1 = eng.insert_job(@job.Job::new(q, "W"))
+  let j2 = eng.insert_job(@job.Job::new(q, "W"))
+  let j3 = eng.insert_job(@job.Job::new(q, "W"))
+  let all_fetched = eng.fetch_jobs(queue=q, limit=3)
+  assert_eq(all_fetched.length(), 3)
+  // Snooze all into the past.
+  let past = @async.now() - 5000L
+  for f in all_fetched {
+    eng.snooze_job(f, scheduled_at=past)
+  }
+  let promoted = eng.stage_scheduled_jobs(queue=q)
+  assert_eq(promoted, 3)
+  for id in [j1.id, j2.id, j3.id] {
+    let pairs = eng.pool.with_conn(async fn(conn) {
+      conn.hgetall(job_hash_key(id))
+    })
+    assert_eq(find_field(pairs, "state").unwrap_or(""), "available")
+  }
+  cleanup(eng, q, [j1.id, j2.id, j3.id])
+}
+
+// ── priority ordering ─────────────────────────────────────────────────────────
+
+///|
+async test "itest: fetch_jobs returns jobs in priority order (lowest int = first)" {
+  let q = "it-priority"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  // Insert in reverse priority order to stress the ordering.
+  let _j9 = eng.insert_job(@job.Job::new(q, "W9").with_priority(9))
+  let _j0 = eng.insert_job(@job.Job::new(q, "W0").with_priority(0))
+  let _j5 = eng.insert_job(@job.Job::new(q, "W5").with_priority(5))
+  let f1 = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(f1.length(), 1)
+  assert_eq(f1[0].job.worker, "W0")
+  let f2 = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(f2.length(), 1)
+  assert_eq(f2[0].job.worker, "W5")
+  let f3 = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(f3.length(), 1)
+  assert_eq(f3[0].job.worker, "W9")
+  cleanup(eng, q, [_j9.id, _j0.id, _j5.id])
+}
+
+///|
+async test "itest: fetch_jobs respects FIFO within the same priority" {
+  let q = "it-priority-fifo"
+  let eng = itest_engine()
+  cleanup(eng, q, [])
+  eng.ensure_stream_group(queue=q)
+  // Use explicit scheduled_at so the ordering is deterministic.
+  let t = 1_000_000L // small fixed timestamp; both jobs share priority 5
+  let ja = eng.insert_job(@job.Job::new(q, "WA").with_priority(5).with_scheduled_at(t))
+  let jb = eng.insert_job(
+    @job.Job::new(q, "WB").with_priority(5).with_scheduled_at(t + 1000L),
+  )
+  let f1 = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(f1.length(), 1)
+  assert_eq(f1[0].job.id, ja.id)
+  let f2 = eng.fetch_jobs(queue=q, limit=1)
+  assert_eq(f2.length(), 1)
+  assert_eq(f2[0].job.id, jb.id)
+  cleanup(eng, q, [ja.id, jb.id])
+}

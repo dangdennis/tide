@@ -1,4 +1,13 @@
 import {
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/redis",
+  "dangdennis/tide/src/engine",
+  "dangdennis/tide/src/worker",
+  "dangdennis/tide/src/queue",
+  "dangdennis/tide/src/plugin",
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+  "moonbitlang/core/builtin",
 }
 
 options(
