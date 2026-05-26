@@ -16,7 +16,7 @@
 pub async fn serve(
   engine : @engine.RedisEngine,
   queues : Map[String, Int],
-  port   : Int,
+  port : Int,
 ) -> Unit raise Error {
   let addr = @socket.Addr::parse("0.0.0.0:\{port}")
   let server = @http.Server(addr)
@@ -24,8 +24,9 @@ pub async fn serve(
   server.run_forever() <| ((request, _body, conn) => {
     route(engine, pool, queues, request, conn) catch {
       e => {
-        conn.send_response(500, "Internal Server Error",
-          extra_headers={"Content-Type": "text/plain"})
+        conn.send_response(500, "Internal Server Error", extra_headers={
+          "Content-Type": "text/plain",
+        })
         conn.write_string("\{e}")
         conn.end_response()
       }
@@ -35,12 +36,13 @@ pub async fn serve(
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
+///|
 async fn route(
   engine : @engine.RedisEngine,
-  pool   : @redis.Pool,
+  pool : @redis.Pool,
   queues : Map[String, Int],
-  req    : @http.Request,
-  conn   : @http.ServerConnection,
+  req : @http.Request,
+  conn : @http.ServerConnection,
 ) -> Unit raise Error {
   // Split path and query string.
   let (path, query) = split_path_query(req.path)
@@ -48,22 +50,22 @@ async fn route(
     (Get, "/") => send_html(conn, DASHBOARD_HTML)
     (Get, "/api/queues") => handle_queues(pool, queues, conn)
     (Get, "/api/jobs") => handle_list_jobs(pool, query, conn)
-    (Get, p) if p.starts_with("/api/jobs/") => {
+    (Get, p) if p.has_prefix("/api/jobs/") => {
       let rest = p["/api/jobs/".length():].to_owned()
-      if rest.ends_with("/retry") {
+      if rest.has_suffix("/retry") {
         // GET /api/jobs/:id/retry is not used; ignore
         send_json(conn, "null")
       } else {
         handle_get_job(pool, rest, conn)
       }
     }
-    (Post, p) if p.starts_with("/api/jobs/") => {
+    (Post, p) if p.has_prefix("/api/jobs/") => {
       let rest = p["/api/jobs/".length():].to_owned()
-      if rest.ends_with("/retry") {
+      if rest.has_suffix("/retry") {
         let id = rest[0:rest.length() - "/retry".length()].to_owned()
         retry_job(engine, id)
         send_json(conn, "{\"ok\":true}")
-      } else if rest.ends_with("/cancel") {
+      } else if rest.has_suffix("/cancel") {
         let id = rest[0:rest.length() - "/cancel".length()].to_owned()
         cancel_job(engine, id)
         send_json(conn, "{\"ok\":true}")
@@ -71,14 +73,15 @@ async fn route(
         send_json(conn, "{\"ok\":false}")
       }
     }
-    (Delete, p) if p.starts_with("/api/jobs/") => {
+    (Delete, p) if p.has_prefix("/api/jobs/") => {
       let id = p["/api/jobs/".length():].to_owned()
       delete_job(pool, id)
       send_json(conn, "{\"ok\":true}")
     }
     _ => {
-      conn.send_response(404, "Not Found",
-        extra_headers={"Content-Type": "text/plain"})
+      conn.send_response(404, "Not Found", extra_headers={
+        "Content-Type": "text/plain",
+      })
       conn.write_string("404")
       conn.end_response()
     }
@@ -87,10 +90,11 @@ async fn route(
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
+///|
 async fn handle_queues(
-  pool   : @redis.Pool,
+  pool : @redis.Pool,
   queues : Map[String, Int],
-  conn   : @http.ServerConnection,
+  conn : @http.ServerConnection,
 ) -> Unit raise Error {
   let parts : Array[String] = []
   for queue, _ in queues {
@@ -100,15 +104,16 @@ async fn handle_queues(
   send_json(conn, "[" + parts.join(",") + "]")
 }
 
+///|
 async fn handle_list_jobs(
-  pool  : @redis.Pool,
+  pool : @redis.Pool,
   query : String,
-  conn  : @http.ServerConnection,
+  conn : @http.ServerConnection,
 ) -> Unit raise Error {
   let params = parse_query(query)
-  let queue  = params.get("queue").unwrap_or("default")
-  let state  = params.get("state").unwrap_or("available")
-  let limit  = @string.parse_int(params.get("limit").unwrap_or("50"), base=10) catch {
+  let queue = params.get("queue").unwrap_or("default")
+  let state = params.get("state").unwrap_or("available")
+  let limit = @string.parse_int(params.get("limit").unwrap_or("50"), base=10) catch {
     _ => 50
   }
   let offset = @string.parse_int(params.get("offset").unwrap_or("0"), base=10) catch {
@@ -119,15 +124,17 @@ async fn handle_list_jobs(
   send_json(conn, "[" + parts.join(",") + "]")
 }
 
+///|
 async fn handle_get_job(
   pool : @redis.Pool,
-  id   : String,
+  id : String,
   conn : @http.ServerConnection,
 ) -> Unit raise Error {
   match get_job(pool, id) {
     None => {
-      conn.send_response(404, "Not Found",
-        extra_headers={"Content-Type": "application/json"})
+      conn.send_response(404, "Not Found", extra_headers={
+        "Content-Type": "application/json",
+      })
       conn.write_string("{\"error\":\"not found\"}")
       conn.end_response()
     }
@@ -137,6 +144,7 @@ async fn handle_get_job(
 
 // ── Response helpers ──────────────────────────────────────────────────────────
 
+///|
 async fn send_html(
   conn : @http.ServerConnection,
   body : String,
@@ -148,6 +156,7 @@ async fn send_html(
   conn.end_response()
 }
 
+///|
 async fn send_json(
   conn : @http.ServerConnection,
   body : String,
@@ -162,10 +171,12 @@ async fn send_json(
 
 // ── JSON serialization ────────────────────────────────────────────────────────
 
+///|
 fn queue_stats_to_json(s : QueueStats) -> String {
   "{\"queue\":\{json_str(s.queue)},\"available\":\{s.available},\"scheduled\":\{s.scheduled},\"executing\":\{s.executing}}"
 }
 
+///|
 fn job_to_json(j : @job.Job) -> String {
   let buf = StringBuilder::new()
   buf.write_string("{")
@@ -191,19 +202,24 @@ fn job_to_json(j : @job.Job) -> String {
   buf.to_string()
 }
 
+///|
 fn json_str(s : String) -> String {
-  "\"" + s
-    .replace_all(old="\\", new="\\\\")
-    .replace_all(old="\"", new="\\\"")
-    .replace_all(old="\n", new="\\n")
-    .replace_all(old="\r", new="\\r")
-    .replace_all(old="\t", new="\\t") + "\""
+  "\"" +
+  s
+  .replace_all(old="\\", new="\\\\")
+  .replace_all(old="\"", new="\\\"")
+  .replace_all(old="\n", new="\\n")
+  .replace_all(old="\r", new="\\r")
+  .replace_all(old="\t", new="\\t") +
+  "\""
 }
 
+///|
 fn json_str_array(arr : Array[String]) -> String {
   "[" + arr.map(fn(s) { json_str(s) }).join(",") + "]"
 }
 
+///|
 fn json_int64_opt(v : Int64?) -> String {
   match v {
     None => "null"
@@ -213,6 +229,7 @@ fn json_int64_opt(v : Int64?) -> String {
 
 // ── URL parsing ───────────────────────────────────────────────────────────────
 
+///|
 /// Split "/path?key=val" into ("/path", "key=val").
 fn split_path_query(raw : String) -> (String, String) {
   let mut qi = -1
@@ -227,10 +244,11 @@ fn split_path_query(raw : String) -> (String, String) {
   if qi < 0 {
     (raw, "")
   } else {
-    (raw[0:qi].to_owned(), raw[qi + 1 :].to_owned())
+    (raw[0:qi].to_owned(), raw[qi + 1:].to_owned())
   }
 }
 
+///|
 /// Parse "key=val&key2=val2" into a Map.
 fn parse_query(query : String) -> Map[String, String] {
   let map : Map[String, String] = Map([])

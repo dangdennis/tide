@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/testing"
+
+import {
+  "dangdennis/tide/src/engine",
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/worker",
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub fn assert_enqueued(SandboxEngine, String, String) -> Bool
+
+pub fn assert_enqueued_where(SandboxEngine, String, (@job.Job) -> Bool) -> Bool
+
+pub async fn drain_queue(SandboxEngine, Map[String, async (@job.Job) -> @worker.PerformResult], String) -> Int raise @engine.EngineError
+
+pub async fn perform_inline(Map[String, async (@job.Job) -> @worker.PerformResult], @job.Job) -> @worker.PerformResult
+
+// Errors
+
+// Types and methods
+pub struct SandboxEngine {
+  jobs : Map[String, @job.Job]
+  queues : Map[String, Array[String]]
+  unique_keys : Map[String, Int64]
+  counter : @ref.Ref[Int]
+}
+pub fn SandboxEngine::job_count(Self) -> Int
+pub fn SandboxEngine::jobs_for_queue(Self, String) -> Array[@job.Job]
+pub fn SandboxEngine::jobs_in_state(Self, @job.JobState) -> Array[@job.Job]
+pub fn SandboxEngine::new() -> Self
+pub impl @engine.Engine for SandboxEngine
+
+// Type aliases
+
+// Traits
+

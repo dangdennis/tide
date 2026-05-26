@@ -1,0 +1,16 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/migration"
+
+// Values
+pub const POSTGRES_DDL : String = "CREATE TABLE IF NOT EXISTS tide_outbox (\n  id           BIGSERIAL   NOT NULL PRIMARY KEY,\n  queue        TEXT        NOT NULL,\n  worker       TEXT        NOT NULL,\n  args         TEXT        NOT NULL DEFAULT '{}',\n  tags         TEXT        NOT NULL DEFAULT '[]',\n  priority     INT         NOT NULL DEFAULT 5,\n  max_attempts INT         NOT NULL DEFAULT 3,\n  scheduled_at BIGINT,\n  inserted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\nCREATE INDEX IF NOT EXISTS tide_outbox_id_idx\n  ON tide_outbox (id);"
+
+pub const SQLITE_DDL : String = "CREATE TABLE IF NOT EXISTS tide_outbox (\n  id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n  queue        TEXT    NOT NULL,\n  worker       TEXT    NOT NULL,\n  args         TEXT    NOT NULL DEFAULT '{}',\n  tags         TEXT    NOT NULL DEFAULT '[]',\n  priority     INTEGER NOT NULL DEFAULT 5,\n  max_attempts INTEGER NOT NULL DEFAULT 3,\n  scheduled_at INTEGER,\n  inserted_at  INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)\n);\nCREATE INDEX IF NOT EXISTS tide_outbox_id_idx\n  ON tide_outbox (id);"
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

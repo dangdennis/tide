@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/notifier"
+
+import {
+  "dangdennis/tide/src/redis",
+  "moonbitlang/core/ref",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct RedisNotifier {
+  config : @redis.ClientConfig
+  channel : String
+  cancelled : @ref.Ref[Map[String, Bool]]
+  cancelled_ids : Array[String]
+}
+pub fn RedisNotifier::is_cancelled(Self, String) -> Bool
+pub async fn RedisNotifier::listen(Self, () -> Bool) -> Unit
+pub fn RedisNotifier::mark_cancelled(Self, String) -> Unit
+pub fn RedisNotifier::new(@redis.ClientConfig, String) -> Self
+pub async fn RedisNotifier::publish_cancel(Self, @redis.Pool, String) -> Unit
+
+// Type aliases
+
+// Traits
+

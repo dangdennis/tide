@@ -1,0 +1,110 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/redis"
+
+import {
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode_resp(String, Int) -> (RespValue, Int) raise RedisError
+
+pub fn encode_command(Array[String]) -> String
+
+pub let move_to_stream_script : String
+
+pub let unique_insert_script : String
+
+// Errors
+pub suberror RedisError {
+  ConnectionFailed(String)
+  IoError(String)
+  ParseError(String)
+  CommandError(String)
+  PoolExhausted
+}
+pub impl Show for RedisError
+
+// Types and methods
+pub struct ClientConfig {
+  host : String
+  port : Int
+  password : String?
+  db : Int
+} derive(@debug.Debug)
+pub fn ClientConfig::default() -> Self
+pub fn ClientConfig::from_url(String) -> Self raise RedisError
+
+pub struct Connection {
+  socket : @socket.Tcp
+  config : ClientConfig
+  mut recv_buf : String
+}
+pub fn Connection::close(Self) -> Unit
+pub async fn Connection::command(Self, Array[String]) -> RespValue raise RedisError
+pub async fn Connection::del(Self, String) -> Int64 raise RedisError
+pub async fn Connection::evalsha(Self, String, Array[String], Array[String]) -> RespValue raise RedisError
+pub async fn Connection::exists(Self, String) -> Bool raise RedisError
+pub async fn Connection::get(Self, String) -> String? raise RedisError
+pub async fn Connection::hget(Self, String, String) -> String? raise RedisError
+pub async fn Connection::hgetall(Self, String) -> Array[String] raise RedisError
+pub async fn Connection::hset(Self, String, Array[String]) -> Int64 raise RedisError
+pub async fn Connection::open(ClientConfig) -> Self raise RedisError
+pub async fn Connection::pipeline(Self, Array[Array[String]]) -> Array[RespValue] raise RedisError
+pub async fn Connection::publish(Self, String, String) -> Int64 raise RedisError
+pub async fn Connection::read_pub_message(Self) -> (String, String) raise RedisError
+pub async fn Connection::scan(Self, String, match_pattern? : String, count? : Int) -> (String, Array[String]) raise RedisError
+pub async fn Connection::script_load(Self, String) -> String raise RedisError
+pub async fn Connection::set(Self, String, String) -> Unit raise RedisError
+pub async fn Connection::set_nx_px(Self, String, String, Int64) -> Bool raise RedisError
+pub async fn Connection::set_px(Self, String, String, Int64) -> Unit raise RedisError
+pub async fn Connection::subscribe(Self, Array[String]) -> Unit raise RedisError
+pub async fn Connection::xack(Self, String, String, String) -> Int64 raise RedisError
+pub async fn Connection::xadd(Self, String, Array[String]) -> String raise RedisError
+pub async fn Connection::xautoclaim(Self, String, String, String, Int64) -> Array[XReadGroupEntry] raise RedisError
+pub async fn Connection::xgroup_create_mkstream(Self, String, String) -> Unit raise RedisError
+pub async fn Connection::xreadgroup(Self, String, String, String, count~ : Int, block_ms~ : Int) -> Array[XReadGroupEntry] raise RedisError
+pub async fn Connection::zadd(Self, String, Int64, String) -> Int64 raise RedisError
+pub async fn Connection::zpopmin(Self, String, Int) -> Array[String] raise RedisError
+pub async fn Connection::zrangebyscore(Self, String, String, String) -> Array[String] raise RedisError
+pub async fn Connection::zrem(Self, String, String) -> Int64 raise RedisError
+
+pub struct Pool {
+  config : ClientConfig
+  max_size : Int
+  available : @aqueue.Queue[Connection]
+}
+pub async fn Pool::acquire(Self) -> Connection raise RedisError
+pub async fn Pool::new(ClientConfig, Int) -> Self raise RedisError
+pub async fn[T] Pool::with_conn(Self, async (Connection) -> T) -> T
+
+pub(all) enum RespValue {
+  SimpleStr(String)
+  SimpleErr(String)
+  Integer(Int64)
+  BulkStr(String)
+  Null
+  Array(Array[RespValue])
+} derive(Eq, @debug.Debug)
+pub fn RespValue::as_array(Self) -> Array[Self] raise RedisError
+pub fn RespValue::as_int(Self) -> Int64 raise RedisError
+pub fn RespValue::as_string(Self) -> String raise RedisError
+pub fn RespValue::is_null(Self) -> Bool
+pub impl Show for RespValue
+
+pub struct ScriptShas {
+  move_to_stream : String
+  unique_insert : String
+}
+pub fn ScriptShas::create(String, String) -> Self
+
+pub struct XReadGroupEntry {
+  stream_id : String
+  fields : Array[String]
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+

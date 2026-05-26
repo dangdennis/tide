@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/plugin/cron"
+
+// Values
+
+// Errors
+pub suberror CronError {
+  InvalidExpression(String)
+}
+pub impl Show for CronError
+
+// Types and methods
+pub(all) struct CronExpr {
+  minutes : Array[Bool]
+  hours : Array[Bool]
+  doms : Array[Bool]
+  months : Array[Bool]
+  dows : Array[Bool]
+}
+pub fn CronExpr::matches_ms(Self, Int64) -> Bool
+pub fn CronExpr::parse(String) -> Self raise CronError
+
+// Type aliases
+
+// Traits
+

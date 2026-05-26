@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/plugin"
+
+import {
+  "dangdennis/tide/src/engine",
+}
+
+// Values
+pub async fn cron_fire(@engine.RedisEngine, CronEntry, Int64) -> Bool raise @engine.EngineError
+
+pub async fn lifeline_tick(@engine.RedisEngine, String, Int64) -> Unit
+
+pub async fn pruner_tick(@engine.RedisEngine, String, Int64, Int) -> Unit
+
+pub async fn stager_tick(@engine.RedisEngine, String) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct CronEntry {
+  schedule : String
+  queue : String
+  worker : String
+  args : String
+}
+pub fn CronEntry::new(String, String, String) -> Self
+pub fn CronEntry::with_args(Self, String) -> Self
+
+// Type aliases
+
+// Traits
+

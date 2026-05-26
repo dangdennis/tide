@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/telemetry"
+
+import {
+  "dangdennis/tide/src/job",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn job_exception_payload(JobEventPayload, Int64, String) -> JobEventPayload
+
+pub fn job_start_payload(@job.Job, Int64) -> JobEventPayload
+
+pub fn job_stop_payload(JobEventPayload, Int64) -> JobEventPayload
+
+// Errors
+
+// Types and methods
+pub(all) struct JobEventPayload {
+  job : @job.Job
+  started_at : Int64
+  duration_ms : Int64
+  error : String
+} derive(@debug.Debug)
+
+pub(all) enum TelemetryEvent {
+  JobStart(JobEventPayload)
+  JobStop(JobEventPayload)
+  JobException(JobEventPayload)
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+pub(open) trait Handler {
+  fn handle(Self, TelemetryEvent) -> Unit
+}
+

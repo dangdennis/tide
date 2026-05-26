@@ -11,6 +11,9 @@
 //   4. Update self.leader accordingly
 
 ///|
+/// Multi-node leader election peer backed by Redis SET NX PX.
+/// One node holds a 30-second lease renewed every 15 seconds; other nodes
+/// become leader only if the current holder fails to renew.
 pub struct RedisPeer {
   pool : @redis.Pool
   name : String
@@ -19,6 +22,8 @@ pub struct RedisPeer {
 }
 
 ///|
+/// Create a `RedisPeer`.  `name` is the logical cluster identifier (must be
+/// the same on every node); `node_id` uniquely identifies this process.
 pub fn RedisPeer::new(
   pool : @redis.Pool,
   name : String,
@@ -28,6 +33,8 @@ pub fn RedisPeer::new(
 }
 
 ///|
+/// Returns `true` if this node currently holds the leadership lease.
+/// Updated after each `tick`; reads a local flag — no Redis call is made.
 pub fn RedisPeer::is_leader(self : RedisPeer) -> Bool {
   self.leader.val
 }
@@ -72,10 +79,7 @@ pub async fn RedisPeer::tick(self : RedisPeer) -> Unit {
 /// Run the election loop, calling tick every 15 s until `is_stopped` returns
 /// true.  Clears the leader flag on clean exit to avoid stale leadership
 /// being observed after the run returns.
-pub async fn RedisPeer::run(
-  self : RedisPeer,
-  is_stopped : () -> Bool,
-) -> Unit {
+pub async fn RedisPeer::run(self : RedisPeer, is_stopped : () -> Bool) -> Unit {
   while !is_stopped() {
     self.tick()
     @async.sleep(15000)

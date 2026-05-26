@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/worker"
+
+import {
+  "dangdennis/tide/src/job",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum PerformResult {
+  Ok
+  Snooze(Int)
+  Discard(String)
+} derive(@debug.Debug)
+pub impl Show for PerformResult
+
+// Type aliases
+
+// Traits
+pub trait Worker {
+  fn perform(Self, @job.Job) -> PerformResult raise
+  fn timeout_ms(Self) -> Int
+}
+

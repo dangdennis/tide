@@ -1,0 +1,68 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/tide"
+
+import {
+  "dangdennis/tide/src/engine",
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/notifier",
+  "dangdennis/tide/src/peer",
+  "dangdennis/tide/src/plugin",
+  "dangdennis/tide/src/queue",
+  "dangdennis/tide/src/worker",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub suberror TideError {
+  ConfigError(String)
+  EngineError(String)
+}
+pub impl Show for TideError
+
+// Types and methods
+pub(all) struct Config {
+  redis_url : String
+  queues : Map[String, Int]
+  pool_size : Int
+  name : String
+  workers : Map[String, async (@job.Job) -> @worker.PerformResult]
+  shutdown_grace_ms : Int
+  job_timeout_ms : Int
+  prune_max_age_ms : Int64?
+  lifeline_rescue_after_ms : Int64
+  cron_entries : Array[@plugin.CronEntry]
+  peer_mode : PeerMode
+  notify_cancel : Bool
+  dashboard_port : Int?
+}
+pub fn Config::default() -> Self
+
+pub struct Instance {
+  engine : @engine.RedisEngine
+  config : Config
+  shutdown : @queue.ShutdownSignal
+  peer : @peer.RedisPeer?
+  notifier : @notifier.RedisNotifier?
+}
+pub async fn Instance::cancel_by_tag(Self, String, String) -> Int raise TideError
+pub async fn Instance::insert(Self, @job.Job) -> @job.Job raise TideError
+pub async fn Instance::insert_all(Self, Array[@job.Job]) -> Array[@job.Job] raise TideError
+pub async fn Instance::insert_unique(Self, @job.Job, @job.UniqueConfig) -> @engine.UniqueInsertResult raise TideError
+pub fn Instance::is_leader(Self) -> Bool
+pub fn Instance::register(Self, String, async (@job.Job) -> @worker.PerformResult) -> Unit
+pub async fn Instance::retry_by_tag(Self, String, String) -> Int raise TideError
+pub async fn Instance::run(Self) -> Unit raise TideError
+pub async fn Instance::start(Config) -> Self raise TideError
+pub fn Instance::stop(Self) -> Unit
+
+pub(all) enum PeerMode {
+  Local
+  Redis
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+

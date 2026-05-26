@@ -1,0 +1,97 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/outbox"
+
+import {
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/tide",
+  "moonbit-community/postgres/pgpool",
+  "moonbit-community/sqlite3",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const PG_CLAIM_SQL : String = "SELECT id, queue, worker, args, tags, priority, max_attempts, scheduled_at\nFROM tide_outbox\nORDER BY id\nLIMIT $1\nFOR UPDATE SKIP LOCKED"
+
+pub const PG_DELETE_SQL : String = "DELETE FROM tide_outbox WHERE id = $1"
+
+pub const PG_INSERT_SQL : String = "INSERT INTO tide_outbox\n  (queue, worker, args, tags, priority, max_attempts, scheduled_at)\nVALUES ($1, $2, $3, $4, $5, $6, $7)"
+
+pub const SQLITE_CLAIM_SQL : String = "SELECT id, queue, worker, args, tags, priority, max_attempts, scheduled_at\nFROM tide_outbox\nORDER BY id\nLIMIT ?"
+
+pub const SQLITE_DELETE_SQL : String = "DELETE FROM tide_outbox WHERE id = ?"
+
+pub const SQLITE_INSERT_SQL : String = "INSERT INTO tide_outbox\n  (queue, worker, args, tags, priority, max_attempts, scheduled_at)\nVALUES (?, ?, ?, ?, ?, ?, ?)"
+
+pub async fn[C : DbConn] insert(C, @job.Job) -> Unit raise OutboxError
+
+pub async fn[C : DbConn] insert_sqlite(C, @job.Job) -> Unit raise OutboxError
+
+// Errors
+pub suberror OutboxError {
+  DbError(String)
+  ForwardError(String)
+}
+pub impl Show for OutboxError
+
+// Types and methods
+pub(all) enum DbValue {
+  Text(String)
+  Integer(Int64)
+  Null
+} derive(Eq, @debug.Debug)
+pub impl Show for DbValue
+
+pub struct OutboxRow {
+  id : Int64
+  queue : String
+  worker : String
+  args : String
+  tags : String
+  priority : Int
+  max_attempts : Int
+  scheduled_at : Int64?
+} derive(@debug.Debug)
+
+pub struct PgClientConn {
+  client : @pgpool.Client
+}
+pub fn PgClientConn::new(@pgpool.Client) -> Self
+pub impl DbConn for PgClientConn
+
+pub struct PgTxConn {
+  tx : @pgpool.Transaction
+}
+pub fn PgTxConn::new(@pgpool.Transaction) -> Self
+pub impl DbConn for PgTxConn
+
+pub struct Relay[C] {
+  instance : @tide.Instance
+  conn : C
+  poll_ms : Int
+  batch_size : Int
+  claim_sql : String
+  delete_sql : String
+}
+pub fn[C] Relay::new(@tide.Instance, C, String, String, poll_ms? : Int, batch_size? : Int) -> Self[C]
+pub async fn[C : DbConn] Relay::run(Self[C]) -> Unit raise OutboxError
+
+pub struct Row {
+  vals : Array[DbValue]
+} derive(@debug.Debug)
+
+pub struct SqliteConn {
+  conn : @sqlite3.Connection
+  col_count : Int
+}
+pub fn SqliteConn::new(@sqlite3.Connection) -> Self
+pub fn SqliteConn::with_col_count(Self, Int) -> Self
+pub impl DbConn for SqliteConn
+
+// Type aliases
+
+// Traits
+pub(open) trait DbConn {
+  async fn exec(Self, String, Array[DbValue]) -> Int raise OutboxError
+  async fn query_rows(Self, String, Array[DbValue]) -> Array[Row] raise OutboxError
+}
+

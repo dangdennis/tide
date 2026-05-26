@@ -1,0 +1,71 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/engine"
+
+import {
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/redis",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub suberror EngineError {
+  RedisFailure(String)
+  JobNotFound(String)
+  InvalidJobData(String)
+}
+pub impl Show for EngineError
+
+// Types and methods
+pub struct RedisEngine {
+  pool : @redis.Pool
+  node_id : String
+  mut shas : @redis.ScriptShas
+}
+pub async fn RedisEngine::cancel_job(Self, id~ : String) -> Unit raise EngineError
+pub async fn RedisEngine::cancel_jobs_by_tag(Self, queue~ : String, tag~ : String) -> Array[String] raise EngineError
+pub async fn RedisEngine::complete_job(Self, @job.FetchedJob) -> Unit raise EngineError
+pub async fn RedisEngine::cron_insert(Self, String, String, String, Int64) -> Bool raise EngineError
+pub async fn RedisEngine::discard_job(Self, @job.FetchedJob) -> Unit raise EngineError
+pub async fn RedisEngine::ensure_scripts(Self) -> Unit raise EngineError
+pub async fn RedisEngine::ensure_stream_group(Self, queue~ : String) -> Unit raise EngineError
+pub async fn RedisEngine::error_job(Self, @job.FetchedJob, error_msg~ : String, next_scheduled_at~ : Int64?) -> Unit raise EngineError
+pub async fn RedisEngine::fetch_jobs(Self, queue~ : String, limit~ : Int) -> Array[@job.FetchedJob] raise EngineError
+pub async fn RedisEngine::insert_all(Self, Array[@job.Job]) -> Array[@job.Job] raise EngineError
+pub async fn RedisEngine::insert_job(Self, @job.Job) -> @job.Job raise EngineError
+pub async fn RedisEngine::insert_unique_job(Self, @job.Job, unique_key~ : String, period_ms~ : Int64) -> UniqueInsertResult raise EngineError
+pub async fn RedisEngine::new(@redis.ClientConfig, Int) -> Self raise EngineError
+pub async fn RedisEngine::prune_jobs(Self, queue~ : String, older_than_ms~ : Int64) -> Int raise EngineError
+pub async fn RedisEngine::reclaim_jobs(Self, queue~ : String, rescue_after_ms~ : Int64) -> Int raise EngineError
+pub async fn RedisEngine::retry_job(Self, id~ : String) -> Unit raise EngineError
+pub async fn RedisEngine::retry_jobs_by_tag(Self, queue~ : String, tag~ : String) -> Int raise EngineError
+pub async fn RedisEngine::snooze_job(Self, @job.FetchedJob, scheduled_at~ : Int64) -> Unit raise EngineError
+pub async fn RedisEngine::stage_scheduled_jobs(Self, queue~ : String) -> Int raise EngineError
+
+pub(all) enum UniqueInsertResult {
+  Inserted(@job.Job)
+  AlreadyExists
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+pub(open) trait Engine {
+  async fn insert_job(Self, @job.Job) -> @job.Job raise EngineError
+  async fn insert_all(Self, Array[@job.Job]) -> Array[@job.Job] raise EngineError
+  async fn fetch_jobs(Self, queue~ : String, limit~ : Int) -> Array[@job.FetchedJob] raise EngineError
+  async fn complete_job(Self, @job.FetchedJob) -> Unit raise EngineError
+  async fn error_job(Self, @job.FetchedJob, error_msg~ : String, next_scheduled_at~ : Int64?) -> Unit raise EngineError
+  async fn snooze_job(Self, @job.FetchedJob, scheduled_at~ : Int64) -> Unit raise EngineError
+  async fn discard_job(Self, @job.FetchedJob) -> Unit raise EngineError
+  async fn cancel_job(Self, id~ : String) -> Unit raise EngineError
+  async fn retry_job(Self, id~ : String) -> Unit raise EngineError
+  async fn prune_jobs(Self, queue~ : String, older_than_ms~ : Int64) -> Int raise EngineError
+  async fn ensure_stream_group(Self, queue~ : String) -> Unit raise EngineError
+  async fn ensure_scripts(Self) -> Unit raise EngineError
+  async fn insert_unique_job(Self, @job.Job, unique_key~ : String, period_ms~ : Int64) -> UniqueInsertResult raise EngineError
+  async fn cancel_jobs_by_tag(Self, queue~ : String, tag~ : String) -> Array[String] raise EngineError
+  async fn retry_jobs_by_tag(Self, queue~ : String, tag~ : String) -> Int raise EngineError
+}
+

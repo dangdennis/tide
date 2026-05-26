@@ -16,19 +16,19 @@
 //   inserted_at  — wall-clock timestamp; used only for observability
 
 ///|
+/// Idempotent DDL to create the `tide_outbox` table and its index in PostgreSQL.
+/// Execute this once at startup or via your migration tool before starting the relay.
 pub const POSTGRES_DDL : String =
-  (
-    #|CREATE TABLE IF NOT EXISTS tide_outbox (
-    #|  id           BIGSERIAL   NOT NULL PRIMARY KEY,
-    #|  queue        TEXT        NOT NULL,
-    #|  worker       TEXT        NOT NULL,
-    #|  args         TEXT        NOT NULL DEFAULT '{}',
-    #|  tags         TEXT        NOT NULL DEFAULT '[]',
-    #|  priority     INT         NOT NULL DEFAULT 5,
-    #|  max_attempts INT         NOT NULL DEFAULT 3,
-    #|  scheduled_at BIGINT,
-    #|  inserted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    #|);
-    #|CREATE INDEX IF NOT EXISTS tide_outbox_id_idx
-    #|  ON tide_outbox (id);
-  )
+  #|CREATE TABLE IF NOT EXISTS tide_outbox (
+  #|  id           BIGSERIAL   NOT NULL PRIMARY KEY,
+  #|  queue        TEXT        NOT NULL,
+  #|  worker       TEXT        NOT NULL,
+  #|  args         TEXT        NOT NULL DEFAULT '{}',
+  #|  tags         TEXT        NOT NULL DEFAULT '[]',
+  #|  priority     INT         NOT NULL DEFAULT 5,
+  #|  max_attempts INT         NOT NULL DEFAULT 3,
+  #|  scheduled_at BIGINT,
+  #|  inserted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  #|);
+  #|CREATE INDEX IF NOT EXISTS tide_outbox_id_idx
+  #|  ON tide_outbox (id);

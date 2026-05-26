@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/queue"
+
+import {
+  "dangdennis/tide/src/engine",
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/worker",
+  "moonbitlang/async/cond_var",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub async fn execute(@engine.RedisEngine, Map[String, async (@job.Job) -> @worker.PerformResult], @job.FetchedJob, timeout_ms? : Int) -> Unit raise @engine.EngineError
+
+// Errors
+
+// Types and methods
+pub(all) struct QueueRunner {
+  engine : @engine.RedisEngine
+  workers : Map[String, async (@job.Job) -> @worker.PerformResult]
+  queue : String
+  concurrency : Int
+  timeout_ms : Int
+  shutdown : ShutdownSignal
+  sem : @semaphore.Semaphore
+}
+pub async fn QueueRunner::fetch_batch(Self) -> Array[@job.FetchedJob] raise @engine.EngineError
+pub fn QueueRunner::new(@engine.RedisEngine, Map[String, async (@job.Job) -> @worker.PerformResult], String, Int, Int, ShutdownSignal) -> Self
+
+pub(all) struct ShutdownSignal {
+  cond : @cond_var.Cond
+  stopped : @ref.Ref[Bool]
+}
+pub fn ShutdownSignal::is_stopped(Self) -> Bool
+pub fn ShutdownSignal::new() -> Self
+pub fn ShutdownSignal::send(Self) -> Unit
+pub async fn ShutdownSignal::wait(Self) -> Unit
+
+// Type aliases
+
+// Traits
+

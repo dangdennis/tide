@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dangdennis/tide/src/peer"
+
+import {
+  "dangdennis/tide/src/redis",
+  "moonbitlang/core/ref",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct LocalPeer {
+  _unit : Unit
+}
+pub fn LocalPeer::is_leader(Self) -> Bool
+pub fn LocalPeer::new() -> Self
+
+pub struct RedisPeer {
+  pool : @redis.Pool
+  name : String
+  node_id : String
+  leader : @ref.Ref[Bool]
+}
+pub fn RedisPeer::election_key(Self) -> String
+pub fn RedisPeer::is_leader(Self) -> Bool
+pub fn RedisPeer::new(@redis.Pool, String, String) -> Self
+pub async fn RedisPeer::run(Self, () -> Bool) -> Unit
+pub async fn RedisPeer::tick(Self) -> Unit
+
+// Type aliases
+
+// Traits
+
