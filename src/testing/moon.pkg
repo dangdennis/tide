@@ -1,0 +1,7 @@
+import {
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/engine",
+  "dangdennis/tide/src/worker",
+  "moonbitlang/async",
+}
+supported_targets = "+native"

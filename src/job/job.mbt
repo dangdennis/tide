@@ -301,7 +301,7 @@ pub fn json_string_array(arr : Array[String]) -> String {
 }
 
 ///|
-fn parse_json_string_array(s : String) -> Array[String] {
+pub fn parse_json_string_array(s : String) -> Array[String] {
   let result : Array[String] = []
   let len = s.length()
   let mut i = 0

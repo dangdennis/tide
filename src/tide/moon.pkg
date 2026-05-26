@@ -7,6 +7,7 @@ import {
   "dangdennis/tide/src/plugin",
   "dangdennis/tide/src/peer",
   "dangdennis/tide/src/notifier",
+  "dangdennis/tide/src/dashboard",
   "moonbitlang/async",
   "moonbitlang/core/builtin",
 }
@@ -14,6 +15,8 @@ import {
 import {
   "moonbitlang/async/cond_var",
 } for "wbtest"
+
+supported_targets = "+native"
 
 options(
   "proof-enabled": true,

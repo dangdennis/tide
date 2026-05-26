@@ -54,19 +54,33 @@ Exit criteria met: unique jobs atomically deduplicated via Lua script; named pri
 
 Exit criteria met: single-node mode requires no config change (Local peer, notify_cancel=false); Redis mode runs election every 15 s with 30 s TTL; cancel signals propagate via pub/sub to all nodes; pre-dispatch cancel check prevents executing already-cancelled jobs.
 
-## Phase 6 — Transactional outbox
-- `src/outbox/postgres.mbt` — `INSERT INTO tide_outbox` within caller's transaction
-- `src/outbox/sqlite.mbt` — same for SQLite
-- `src/outbox/relay.mbt` — poll outbox, call `Tide.insert`, delete row; `SELECT FOR UPDATE SKIP LOCKED`
-- `src/migration/postgres.mbt` — DDL for `tide_outbox`
-- `src/migration/sqlite.mbt` — DDL for `tide_outbox`
+## Phase 6 — Transactional outbox ✅
+- `src/outbox/db.mbt` — `DbConn` open trait, `DbValue` enum, `Row`/`OutboxRow` structs, `OutboxError`
+- `src/outbox/outbox.mbt` — `insert[C: DbConn]()` (Postgres) and `insert_sqlite[C: DbConn]()` caller API
+- `src/outbox/postgres.mbt` — `PgClientConn` and `PgTxConn` adapters; `PG_CLAIM_SQL`, `PG_DELETE_SQL`
+- `src/outbox/sqlite.mbt` — `SqliteConn` adapter; `SQLITE_CLAIM_SQL`, `SQLITE_DELETE_SQL`
+- `src/outbox/relay.mbt` — `Relay[C]` polling loop; `parse_outbox_row`, `outbox_row_to_job`
+- `src/migration/postgres.mbt` — `POSTGRES_DDL` (CREATE TABLE + INDEX)
+- `src/migration/sqlite.mbt` — `SQLITE_DDL` (CREATE TABLE + INDEX)
+- `src/outbox/outbox_wbtest.mbt` — 5 unit tests using in-memory SQLite (no external service required)
 
-## Phase 7 — Telemetry & testing helpers
-- `src/telemetry/event.mbt` — `[:tide, :job, :start | :stop | :exception]` events; `Handler` trait
-- `src/testing/helpers.mbt` — `assert_enqueued`, `drain_queue`, `perform_inline`
-- `src/testing/sandbox.mbt` — in-memory engine for unit tests (no Redis)
+## Phase 7 — Telemetry & testing helpers ✅ COMPLETE
+- [x] `src/telemetry/event.mbt` — `TelemetryEvent` enum (JobStart/JobStop/JobException) + `JobEventPayload` + `Handler` open trait + payload builder helpers
+- [x] `src/testing/sandbox.mbt` — `SandboxEngine` implementing the full `Engine` trait with in-memory Map storage; inspection helpers (`jobs_in_state`, `jobs_for_queue`, `job_count`)
+- [x] `src/testing/helpers.mbt` — `perform_inline`, `assert_enqueued`, `assert_enqueued_where`, `drain_queue`
+- [x] 15 whitebox tests for sandbox + helpers pass (total: 226 tests, all pass)
 
-## Phase 8 - Dashboard
+Exit criteria met: workers can be unit-tested without Redis using SandboxEngine; `perform_inline` calls a worker directly; `drain_queue` runs all available jobs; `assert_enqueued` checks queue contents; telemetry Handler trait ready to be wired into the executor.
+
+## Phase 8 — Dashboard ✅ COMPLETE
+- [x] `src/dashboard/api.mbt` — Redis query layer: `queue_stats`, `list_jobs` (available/scheduled/executing/terminal), `get_job`, `retry_job`, `cancel_job`, `delete_job`
+- [x] `src/dashboard/handler.mbt` — HTTP routing via `@http.Server`; JSON serialization; URL/query-string parsing; `serve(engine, queues, port)` entry point
+- [x] `src/dashboard/html.mbt` — Embedded single-page app (`DASHBOARD_HTML` const); vanilla HTML/CSS/JS; queue tabs, stats bar, job table, detail panel, retry/cancel/delete actions, auto-refresh every 5s
+- [x] `src/dashboard/moon.pkg` — imports async/http, async/socket, redis, engine, job
+- [x] `src/tide/tide.mbt` — `Config.dashboard_port : Int?` (default `None`); spawns `@dashboard.serve()` as background task in `Instance::run()` when set
+- [x] All existing 226 tests continue to pass (37 Redis integration tests require docker-compose)
+
+Usage: set `dashboard_port: Some(4567)` in `Config` and open `http://localhost:4567`.
 
 ## Phase 9 — Post-1.0
 - Workflows (DAG of jobs)

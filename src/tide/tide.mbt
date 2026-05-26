@@ -22,6 +22,8 @@ pub(all) struct Config {
   // Phase 5 multi-node coordination:
   peer_mode : PeerMode // Local (default) or Redis for multi-node election
   notify_cancel : Bool // true = enable pub/sub cancel-signal propagation
+  // Phase 8 dashboard:
+  dashboard_port : Int? // None = disabled (default); Some(4567) = enable web dashboard
 }
 
 ///|
@@ -39,6 +41,7 @@ pub fn Config::default() -> Config {
     cron_entries: [],
     peer_mode: Local,
     notify_cancel: false,
+    dashboard_port: None,
   }
 }
 
@@ -233,6 +236,17 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
           }
         }
         @async.sleep(1000)
+      }
+    }
+    // ── Dashboard: optional embedded web UI ───────────────────────────────────
+    match self.config.dashboard_port {
+      None => ()
+      Some(port) => {
+        let eng = self.engine
+        let qs = self.config.queues
+        tg.spawn_bg(allow_failure=true) <| () => {
+          @dashboard.serve(eng, qs, port) catch { _ => () }
+        }
       }
     }
     self.shutdown.wait() catch {

@@ -1,0 +1,4 @@
+import {
+  "dangdennis/tide/src/job",
+}
+supported_targets = "+native"

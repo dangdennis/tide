@@ -1,0 +1,10 @@
+import {
+  "dangdennis/tide/src/job",
+  "dangdennis/tide/src/tide",
+  "moonbitlang/async",
+  "moonbitlang/core/string",
+  "moonbit-community/postgres/pgpool",
+  "moonbit-community/postgres/client",
+  "moonbit-community/sqlite3",
+}
+supported_targets = "+native"

@@ -29,4 +29,6 @@ description = ""
 
 import {
   "moonbitlang/async@0.19.1",
+  "moonbit-community/postgres@0.0.6",
+  "moonbit-community/sqlite3@0.1.5",
 }
