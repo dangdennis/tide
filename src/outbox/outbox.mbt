@@ -26,22 +26,18 @@
 ///|
 /// Parameterised INSERT for PostgreSQL ($1 … $7 placeholders).
 pub const PG_INSERT_SQL : String =
-  (
-    #|INSERT INTO tide_outbox
-    #|  (queue, worker, args, tags, priority, max_attempts, scheduled_at)
-    #|VALUES ($1, $2, $3, $4, $5, $6, $7)
-  )
+  #|INSERT INTO tide_outbox
+  #|  (queue, worker, args, tags, priority, max_attempts, scheduled_at)
+  #|VALUES ($1, $2, $3, $4, $5, $6, $7)
 
 // ── SQLite INSERT SQL ─────────────────────────────────────────────────────────
 
 ///|
 /// Parameterised INSERT for SQLite (? positional placeholders).
 pub const SQLITE_INSERT_SQL : String =
-  (
-    #|INSERT INTO tide_outbox
-    #|  (queue, worker, args, tags, priority, max_attempts, scheduled_at)
-    #|VALUES (?, ?, ?, ?, ?, ?, ?)
-  )
+  #|INSERT INTO tide_outbox
+  #|  (queue, worker, args, tags, priority, max_attempts, scheduled_at)
+  #|VALUES (?, ?, ?, ?, ?, ?, ?)
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -49,7 +45,10 @@ pub const SQLITE_INSERT_SQL : String =
 /// Insert `job` into tide_outbox using a Postgres-flavoured parameterised
 /// INSERT ($1 … $7).  Call this within the caller's open transaction so that
 /// the outbox write is committed atomically with the caller's business logic.
-pub async fn[C : DbConn] insert(conn : C, job : @job.Job) -> Unit raise OutboxError {
+pub async fn[C : DbConn] insert(
+  conn : C,
+  job : @job.Job,
+) -> Unit raise OutboxError {
   insert_with_sql(conn, PG_INSERT_SQL, job)
 }
 

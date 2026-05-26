@@ -7,4 +7,5 @@ import {
   "moonbitlang/async/http",
   "moonbitlang/core/string",
 }
+
 supported_targets = "+native"

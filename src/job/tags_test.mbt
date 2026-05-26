@@ -50,7 +50,10 @@ test "jobs_with_tag on empty array returns empty array" {
 
 ///|
 test "jobs_with_tag does not modify the input array" {
-  let jobs = [Job::new("q", "W").with_tags(["a"]), Job::new("q", "W").with_tags(["b"])]
+  let jobs = [
+    Job::new("q", "W").with_tags(["a"]),
+    Job::new("q", "W").with_tags(["b"]),
+  ]
   let _ = jobs_with_tag(jobs, "a")
   assert_eq(jobs.length(), 2)
 }

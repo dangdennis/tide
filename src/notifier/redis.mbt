@@ -26,6 +26,7 @@
 // Max number of cancelled job IDs held in memory.  When this limit is reached,
 // the oldest half are evicted.  Cancel signals are best-effort; eviction only
 // affects jobs cancelled long before the cap was hit.
+///|
 let max_cancelled = 10000
 
 ///|
@@ -46,7 +47,10 @@ pub fn RedisNotifier::new(
 
 ///|
 /// Return true if a cancel signal has been received for `job_id`.
-pub fn RedisNotifier::is_cancelled(self : RedisNotifier, job_id : String) -> Bool {
+pub fn RedisNotifier::is_cancelled(
+  self : RedisNotifier,
+  job_id : String,
+) -> Bool {
   self.cancelled.val.get(job_id) is Some(_)
 }
 
@@ -120,10 +124,9 @@ pub async fn RedisNotifier::listen(
   }
   while !is_stopped() {
     // Use a 1 s read timeout so we can check is_stopped periodically.
-    let result = try? @async.with_timeout_opt(
-      1000,
-      async fn() { conn.read_pub_message() },
-    )
+    let result = try? @async.with_timeout_opt(1000, async fn() {
+      conn.read_pub_message()
+    })
     match result {
       Ok(None) => () // timeout; loop and re-check is_stopped
       Ok(Some((_, job_id))) => self.cancelled.val[job_id] = true

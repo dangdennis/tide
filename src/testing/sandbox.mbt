@@ -31,11 +31,13 @@ pub fn SandboxEngine::new() -> SandboxEngine {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+///|
 fn SandboxEngine::next_id(self : SandboxEngine) -> String {
   self.counter.val = self.counter.val + 1
   "sandbox_\{self.counter.val}"
 }
 
+///|
 /// Retrieve (or lazily create) the available-job list for a queue.
 fn SandboxEngine::queue_list(
   self : SandboxEngine,
@@ -51,8 +53,13 @@ fn SandboxEngine::queue_list(
   }
 }
 
+///|
 /// Remove a job id from the available list (if present).
-fn SandboxEngine::dequeue(self : SandboxEngine, queue : String, id : String) -> Unit {
+fn SandboxEngine::dequeue(
+  self : SandboxEngine,
+  queue : String,
+  id : String,
+) -> Unit {
   match self.queues.get(queue) {
     None => ()
     Some(arr) => {
@@ -68,11 +75,8 @@ fn SandboxEngine::dequeue(self : SandboxEngine, queue : String, id : String) -> 
   }
 }
 
-fn make_inserted(
-  job : @job.Job,
-  id : String,
-  now : Int64,
-) -> @job.Job {
+///|
+fn make_inserted(job : @job.Job, id : String, now : Int64) -> @job.Job {
   let scheduled_at = if job.scheduled_at > 0L { job.scheduled_at } else { now }
   { ..job, id, inserted_at: now, scheduled_at }
 }
@@ -80,10 +84,7 @@ fn make_inserted(
 // ── Engine trait implementation ───────────────────────────────────────────────
 
 ///|
-pub impl @engine.Engine for SandboxEngine with insert_job(
-  self,
-  job,
-) -> @job.Job raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn insert_job(self, job) -> @job.Job raise @engine.EngineError {
   let id = self.next_id()
   let now = @async.now()
   let inserted = make_inserted(job, id, now)
@@ -95,10 +96,9 @@ pub impl @engine.Engine for SandboxEngine with insert_job(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with insert_all(
-  self,
-  jobs,
-) -> Array[@job.Job] raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn insert_all(self, jobs) -> Array[
+  @job.Job,
+] raise @engine.EngineError {
   let result : Array[@job.Job] = []
   for j in jobs {
     result.push(self.insert_job(j))
@@ -107,7 +107,7 @@ pub impl @engine.Engine for SandboxEngine with insert_all(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with fetch_jobs(
+pub impl @engine.Engine for SandboxEngine with fn fetch_jobs(
   self,
   queue~ : String,
   limit~ : Int,
@@ -134,21 +134,21 @@ pub impl @engine.Engine for SandboxEngine with fetch_jobs(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with complete_job(
-  self,
-  fetched,
-) -> Unit raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn complete_job(self, fetched) -> Unit raise @engine.EngineError {
   let id = fetched.job.id
   match self.jobs.get(id) {
     None => ()
-    Some(job) => {
-      self.jobs[id] = { ..job, state: @job.Completed, completed_at: Some(@async.now()) }
-    }
+    Some(job) =>
+      self.jobs[id] = {
+        ..job,
+        state: @job.Completed,
+        completed_at: Some(@async.now()),
+      }
   }
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with error_job(
+pub impl @engine.Engine for SandboxEngine with fn error_job(
   self,
   fetched,
   error_msg~ : String,
@@ -178,7 +178,7 @@ pub impl @engine.Engine for SandboxEngine with error_job(
           // Re-enqueue for sandbox (ignore scheduled_at timing).
           self.queue_list(job.queue).push(id)
         }
-        None => {
+        None =>
           self.jobs[id] = {
             ..job,
             state: @job.Discarded,
@@ -186,14 +186,13 @@ pub impl @engine.Engine for SandboxEngine with error_job(
             errors: new_errors,
             discarded_at: Some(now),
           }
-        }
       }
     }
   }
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with snooze_job(
+pub impl @engine.Engine for SandboxEngine with fn snooze_job(
   self,
   fetched,
   scheduled_at~ : Int64,
@@ -210,10 +209,7 @@ pub impl @engine.Engine for SandboxEngine with snooze_job(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with discard_job(
-  self,
-  fetched,
-) -> Unit raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn discard_job(self, fetched) -> Unit raise @engine.EngineError {
   let id = fetched.job.id
   match self.jobs.get(id) {
     None => ()
@@ -227,24 +223,22 @@ pub impl @engine.Engine for SandboxEngine with discard_job(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with cancel_job(
-  self,
-  id~ : String,
-) -> Unit raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn cancel_job(self, id~ : String) -> Unit raise @engine.EngineError {
   match self.jobs.get(id) {
     None => ()
     Some(job) => {
-      self.jobs[id] = { ..job, state: @job.Cancelled, cancelled_at: Some(@async.now()) }
+      self.jobs[id] = {
+        ..job,
+        state: @job.Cancelled,
+        cancelled_at: Some(@async.now()),
+      }
       self.dequeue(job.queue, id)
     }
   }
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with retry_job(
-  self,
-  id~ : String,
-) -> Unit raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn retry_job(self, id~ : String) -> Unit raise @engine.EngineError {
   match self.jobs.get(id) {
     None => ()
     Some(job) => {
@@ -260,7 +254,7 @@ pub impl @engine.Engine for SandboxEngine with retry_job(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with prune_jobs(
+pub impl @engine.Engine for SandboxEngine with fn prune_jobs(
   self,
   queue~ : String,
   older_than_ms~ : Int64,
@@ -279,7 +273,7 @@ pub impl @engine.Engine for SandboxEngine with prune_jobs(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with ensure_stream_group(
+pub impl @engine.Engine for SandboxEngine with fn ensure_stream_group(
   self,
   queue~ : String,
 ) -> Unit raise @engine.EngineError {
@@ -288,14 +282,12 @@ pub impl @engine.Engine for SandboxEngine with ensure_stream_group(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with ensure_scripts(
-  _self,
-) -> Unit raise @engine.EngineError {
+pub impl @engine.Engine for SandboxEngine with fn ensure_scripts(_self) -> Unit raise @engine.EngineError {
   // No-op for sandbox.
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with insert_unique_job(
+pub impl @engine.Engine for SandboxEngine with fn insert_unique_job(
   self,
   job,
   unique_key~ : String,
@@ -303,7 +295,8 @@ pub impl @engine.Engine for SandboxEngine with insert_unique_job(
 ) -> @engine.UniqueInsertResult raise @engine.EngineError {
   let now = @async.now()
   match self.unique_keys.get(unique_key) {
-    Some(expiry) if expiry > now => return @engine.UniqueInsertResult::AlreadyExists
+    Some(expiry) if expiry > now =>
+      return @engine.UniqueInsertResult::AlreadyExists
     _ => ()
   }
   let inserted = self.insert_job(job)
@@ -312,7 +305,7 @@ pub impl @engine.Engine for SandboxEngine with insert_unique_job(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with cancel_jobs_by_tag(
+pub impl @engine.Engine for SandboxEngine with fn cancel_jobs_by_tag(
   self,
   queue~ : String,
   tag~ : String,
@@ -338,7 +331,7 @@ pub impl @engine.Engine for SandboxEngine with cancel_jobs_by_tag(
 }
 
 ///|
-pub impl @engine.Engine for SandboxEngine with retry_jobs_by_tag(
+pub impl @engine.Engine for SandboxEngine with fn retry_jobs_by_tag(
   self,
   queue~ : String,
   tag~ : String,
@@ -407,6 +400,7 @@ pub fn SandboxEngine::job_count(self : SandboxEngine) -> Int {
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
+///|
 fn is_terminal(state : @job.JobState) -> Bool {
   match state {
     @job.Completed | @job.Discarded | @job.Cancelled => true

@@ -3,7 +3,7 @@
 // needs no external assets — just serve this from GET /.
 
 ///|
-pub const DASHBOARD_HTML : String = (
+pub const DASHBOARD_HTML : String =
   #|<!DOCTYPE html>
   #|<html lang="en">
   #|<head>
@@ -245,4 +245,3 @@ pub const DASHBOARD_HTML : String = (
   #|</script>
   #|</body>
   #|</html>
-)

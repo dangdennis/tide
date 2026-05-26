@@ -90,7 +90,9 @@ async fn main {
   let avail_key = "tide:{" + queue + "}:available"
   let strm_key = "tide:{" + queue + "}:stream"
 
-  println("── Drain monitor ────────────────────────────────────────────────")
+  println(
+    "── Drain monitor ────────────────────────────────────────────────",
+  )
   println("  Polling every 250 ms until queue is empty …\n")
 
   let t_drain = @async.now()
@@ -101,12 +103,14 @@ async fn main {
     let (available, pending) = pool.with_conn(async fn(conn) {
       let av = conn.command(["ZCARD", avail_key]).as_int() catch { _ => -1L }
       let pend_arr = conn.command(["XPENDING", strm_key, "workers"]).as_array() catch {
-        _ => []
-      }
+          _ => []
+        }
       let pend = if pend_arr.is_empty() {
         0L
       } else {
-        pend_arr[0].as_int() catch { _ => 0L }
+        pend_arr[0].as_int() catch {
+          _ => 0L
+        }
       }
       (av, pend)
     }) catch {
@@ -137,7 +141,9 @@ async fn main {
     0L
   }
 
-  println("\n── Results ──────────────────────────────────────────────────────")
+  println(
+    "\n── Results ──────────────────────────────────────────────────────",
+  )
   println("  total jobs:     \{n}")
   println("  insert time:    \{insert_ms}ms  (\{insert_rate} inserts/s)")
   println("  drain time:     \{drain_ms}ms  (\{drain_rate} jobs/s throughput)")
@@ -154,7 +160,9 @@ async fn main {
 
     pool.with_conn(async fn(conn) {
       for id in sample_ids {
-        let raw = conn.hget("tide:job:\{id}", "attempted_by") catch { _ => None }
+        let raw = conn.hget("tide:job:\{id}", "attempted_by") catch {
+          _ => None
+        }
         match raw {
           None =>
             println(

@@ -63,19 +63,13 @@ pub(open) trait Engine {
 
   // Cancel all non-terminal jobs in `queue` that carry `tag`.
   // Returns the IDs of cancelled jobs (length = count).
-  async fn cancel_jobs_by_tag(
-    Self,
-    queue~ : String,
-    tag~ : String,
-  ) -> Array[String] raise EngineError
+  async fn cancel_jobs_by_tag(Self, queue~ : String, tag~ : String) -> Array[
+    String,
+  ] raise EngineError
 
   // Re-enqueue discarded or cancelled jobs in `queue` that carry `tag`.
   // Returns the number of jobs re-enqueued.
-  async fn retry_jobs_by_tag(
-    Self,
-    queue~ : String,
-    tag~ : String,
-  ) -> Int raise EngineError
+  async fn retry_jobs_by_tag(Self, queue~ : String, tag~ : String) -> Int raise EngineError
 }
 
 ///|

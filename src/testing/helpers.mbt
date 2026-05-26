@@ -19,9 +19,7 @@ pub async fn perform_inline(
 ) -> @worker.PerformResult raise Error {
   match workers.get(job.worker) {
     None =>
-      @worker.PerformResult::Discard(
-        "no worker registered for '\{job.worker}'",
-      )
+      @worker.PerformResult::Discard("no worker registered for '\{job.worker}'")
     Some(f) => f(job)
   }
 }
@@ -111,8 +109,7 @@ pub async fn drain_queue(
           scheduled_at=@async.now() + Int64::from_int(secs) * 1000L,
         )
       Ok(@worker.PerformResult::Discard(_reason)) => engine.discard_job(f)
-      Err(e) =>
-        engine.error_job(f, error_msg="\{e}", next_scheduled_at=None)
+      Err(e) => engine.error_job(f, error_msg="\{e}", next_scheduled_at=None)
     }
     count = count + 1
   }

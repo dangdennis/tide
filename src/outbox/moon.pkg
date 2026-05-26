@@ -7,4 +7,5 @@ import {
   "moonbit-community/postgres/client",
   "moonbit-community/sqlite3",
 }
+
 supported_targets = "+native"

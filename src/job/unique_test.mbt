@@ -11,7 +11,10 @@ test "compute_unique_key starts with tide:unique:" {
 test "compute_unique_key default fields: queue + worker + args" {
   let job = Job::new("default", "EmailWorker")
   let config = UniqueConfig::new(3_600_000L)
-  assert_eq(compute_unique_key(job, config), "tide:unique:default:EmailWorker:{}")
+  assert_eq(
+    compute_unique_key(job, config),
+    "tide:unique:default:EmailWorker:{}",
+  )
 }
 
 ///|

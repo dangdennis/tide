@@ -132,9 +132,10 @@ async test "retry_jobs_by_tag: re-enqueues matching discarded jobs" {
 
 ///|
 async test "perform_inline: calls worker and returns result" {
-  let workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error] = Map([
-    ("EchoWorker", async fn(_job) { @worker.PerformResult::Ok }),
-  ])
+  let workers : Map[
+    String,
+    async (@job.Job) -> @worker.PerformResult raise Error,
+  ] = Map([("EchoWorker", async fn(_job) { @worker.PerformResult::Ok })])
   let job = @job.Job::new("q", "EchoWorker")
   let result = perform_inline(workers, job)
   match result {
@@ -145,7 +146,10 @@ async test "perform_inline: calls worker and returns result" {
 
 ///|
 async test "perform_inline: returns Discard for missing worker" {
-  let workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error] = Map([])
+  let workers : Map[
+    String,
+    async (@job.Job) -> @worker.PerformResult raise Error,
+  ] = Map([])
   let job = @job.Job::new("q", "Missing")
   let result = perform_inline(workers, job)
   match result {
@@ -159,9 +163,10 @@ async test "drain_queue: runs all available jobs" {
   let eng = SandboxEngine::new()
   let _ = eng.insert_job(@job.Job::new("q", "W"))
   let _ = eng.insert_job(@job.Job::new("q", "W"))
-  let workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error] = Map([
-    ("W", async fn(_job) { @worker.PerformResult::Ok }),
-  ])
+  let workers : Map[
+    String,
+    async (@job.Job) -> @worker.PerformResult raise Error,
+  ] = Map([("W", async fn(_job) { @worker.PerformResult::Ok })])
   let count = drain_queue(eng, workers, "q")
   assert_eq(count, 2)
   assert_eq(eng.jobs_in_state(@job.Completed).length(), 2)
@@ -173,6 +178,8 @@ async test "assert_enqueued_where: finds job by predicate" {
   let _ = eng.insert_job(@job.Job::new("q", "W").with_args("{\"x\":1}"))
   let found = assert_enqueued_where(eng, "q", fn(j) { j.args == "{\"x\":1}" })
   assert_eq(found, true)
-  let not_found = assert_enqueued_where(eng, "q", fn(j) { j.args == "{\"x\":2}" })
+  let not_found = assert_enqueued_where(eng, "q", fn(j) {
+    j.args == "{\"x\":2}"
+  })
   assert_eq(not_found, false)
 }

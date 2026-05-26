@@ -27,13 +27,11 @@
 ///|
 /// SELECT … FOR UPDATE SKIP LOCKED allows multiple concurrent relay processes.
 pub const PG_CLAIM_SQL : String =
-  (
-    #|SELECT id, queue, worker, args, tags, priority, max_attempts, scheduled_at
-    #|FROM tide_outbox
-    #|ORDER BY id
-    #|LIMIT $1
-    #|FOR UPDATE SKIP LOCKED
-  )
+  #|SELECT id, queue, worker, args, tags, priority, max_attempts, scheduled_at
+  #|FROM tide_outbox
+  #|ORDER BY id
+  #|LIMIT $1
+  #|FOR UPDATE SKIP LOCKED
 
 ///|
 /// DELETE used by the relay after each row is forwarded to tide.
@@ -53,11 +51,7 @@ pub fn PgClientConn::new(client : @pgpool.Client) -> PgClientConn {
 }
 
 ///|
-pub impl DbConn for PgClientConn with exec(
-  self,
-  sql,
-  params,
-) -> Int raise OutboxError {
+pub impl DbConn for PgClientConn with fn exec(self, sql, params) -> Int raise OutboxError {
   let pg_params = db_values_to_pg(params)
   self.client.execute(sql, params=pg_params) catch {
     e => raise OutboxError::DbError("pg execute: \{e}")
@@ -65,11 +59,9 @@ pub impl DbConn for PgClientConn with exec(
 }
 
 ///|
-pub impl DbConn for PgClientConn with query_rows(
-  self,
-  sql,
-  params,
-) -> Array[Row] raise OutboxError {
+pub impl DbConn for PgClientConn with fn query_rows(self, sql, params) -> Array[
+  Row,
+] raise OutboxError {
   let pg_params = db_values_to_pg(params)
   let pg_rows = self.client.query_all(sql, params=pg_params) catch {
     e => raise OutboxError::DbError("pg query: \{e}")
@@ -93,11 +85,7 @@ pub fn PgTxConn::new(tx : @pgpool.Transaction) -> PgTxConn {
 }
 
 ///|
-pub impl DbConn for PgTxConn with exec(
-  self,
-  sql,
-  params,
-) -> Int raise OutboxError {
+pub impl DbConn for PgTxConn with fn exec(self, sql, params) -> Int raise OutboxError {
   let pg_params = db_values_to_pg(params)
   self.tx.execute(sql, params=pg_params) catch {
     e => raise OutboxError::DbError("pg tx execute: \{e}")
@@ -105,11 +93,7 @@ pub impl DbConn for PgTxConn with exec(
 }
 
 ///|
-pub impl DbConn for PgTxConn with query_rows(
-  self,
-  sql,
-  params,
-) -> Array[Row] raise OutboxError {
+pub impl DbConn for PgTxConn with fn query_rows(self, sql, params) -> Array[Row] raise OutboxError {
   let pg_params = db_values_to_pg(params)
   let pg_rows = self.tx.query_all(sql, params=pg_params) catch {
     e => raise OutboxError::DbError("pg tx query: \{e}")
@@ -125,9 +109,9 @@ fn db_values_to_pg(params : Array[DbValue]) -> Array[&@client.ToSql] {
   let out : Array[&@client.ToSql] = []
   for p in params {
     match p {
-      Text(s)    => out.push(s as &@client.ToSql)
+      Text(s) => out.push(s as &@client.ToSql)
       Integer(n) => out.push(n as &@client.ToSql)
-      Null       => out.push((None : String?) as &@client.ToSql)
+      Null => out.push((None : String?) as &@client.ToSql)
     }
   }
   out
@@ -139,14 +123,10 @@ fn pg_row_to_row(row : @client.Row) -> Row {
   let n = row.len()
   let vals : Array[DbValue] = []
   for i in 0..<n {
-    let cell = try {
-      row.get_text(i)
-    } catch {
-      _ => None
-    }
+    let cell = row.get_text(i) catch { _ => None }
     match cell {
       Some(s) => vals.push(Text(s))
-      None    => vals.push(Null)
+      None => vals.push(Null)
     }
   }
   { vals, }

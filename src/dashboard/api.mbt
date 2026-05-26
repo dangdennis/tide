@@ -5,7 +5,7 @@
 
 ///|
 pub struct QueueStats {
-  queue     : String
+  queue : String
   available : Int
   scheduled : Int
   executing : Int
@@ -16,18 +16,16 @@ pub struct QueueStats {
 ///|
 /// Return live counts (available, scheduled, executing) for a single queue.
 pub async fn queue_stats(
-  pool  : @redis.Pool,
+  pool : @redis.Pool,
   queue : String,
 ) -> QueueStats raise Error {
   pool.with_conn(async fn(conn) {
-    let avail_n = conn.command([
-      "ZCARD",
-      "tide:{" + queue + "}:available",
-    ]).as_int()
-    let sched_n = conn.command([
-      "ZCARD",
-      "tide:{" + queue + "}:scheduled",
-    ]).as_int()
+    let avail_n = conn
+      .command(["ZCARD", "tide:{" + queue + "}:available"])
+      .as_int()
+    let sched_n = conn
+      .command(["ZCARD", "tide:{" + queue + "}:scheduled"])
+      .as_int()
     // XPENDING stream group - + COUNT  →  one entry per in-flight job.
     let pending_resp = conn.command([
       "XPENDING",
@@ -60,28 +58,18 @@ pub async fn queue_stats(
 /// For terminal states (completed/discarded/cancelled/retryable): SCAN all
 ///   `tide:job:*` hashes and filter — O(N) on total jobs, capped at 1 000 scanned.
 pub async fn list_jobs(
-  pool   : @redis.Pool,
-  queue  : String,
-  state  : String,
-  limit  : Int,
+  pool : @redis.Pool,
+  queue : String,
+  state : String,
+  limit : Int,
   offset : Int,
 ) -> Array[@job.Job] raise Error {
   pool.with_conn(async fn(conn) {
     match state {
       "available" =>
-        list_from_zset(
-          conn,
-          "tide:{" + queue + "}:available",
-          offset,
-          limit,
-        )
+        list_from_zset(conn, "tide:{" + queue + "}:available", offset, limit)
       "scheduled" =>
-        list_from_zset(
-          conn,
-          "tide:{" + queue + "}:scheduled",
-          offset,
-          limit,
-        )
+        list_from_zset(conn, "tide:{" + queue + "}:scheduled", offset, limit)
       "executing" => list_executing(conn, queue, offset, limit)
       _ => list_terminal(conn, queue, state, offset, limit)
     }
@@ -90,10 +78,10 @@ pub async fn list_jobs(
 
 ///|
 async fn list_from_zset(
-  conn   : @redis.Connection,
-  key    : String,
+  conn : @redis.Connection,
+  key : String,
   offset : Int,
-  limit  : Int,
+  limit : Int,
 ) -> Array[@job.Job] raise @redis.RedisError {
   let end_idx = offset + limit - 1
   let ids = conn
@@ -114,10 +102,10 @@ async fn list_from_zset(
 
 ///|
 async fn list_executing(
-  conn   : @redis.Connection,
-  queue  : String,
+  conn : @redis.Connection,
+  queue : String,
   offset : Int,
-  limit  : Int,
+  limit : Int,
 ) -> Array[@job.Job] raise @redis.RedisError {
   let pending = conn
     .command([
@@ -171,11 +159,11 @@ async fn list_executing(
 
 ///|
 async fn list_terminal(
-  conn   : @redis.Connection,
-  queue  : String,
-  state  : String,
+  conn : @redis.Connection,
+  queue : String,
+  state : String,
   offset : Int,
-  limit  : Int,
+  limit : Int,
 ) -> Array[@job.Job] raise @redis.RedisError {
   // SCAN all tide:job:* keys and filter by queue + state.
   // Capped at 1 000 keys to limit latency.
@@ -183,11 +171,7 @@ async fn list_terminal(
   let mut cursor = "0"
   let mut scanned = 0
   while scanned < 1000 && matching.length() < offset + limit {
-    let (next, keys) = conn.scan(
-      cursor,
-      match_pattern="tide:job:*",
-      count=100,
-    )
+    let (next, keys) = conn.scan(cursor, match_pattern="tide:job:*", count=100)
     cursor = next
     for key in keys {
       let pairs = conn.hgetall(key)
@@ -231,7 +215,7 @@ pub async fn get_job(pool : @redis.Pool, id : String) -> @job.Job? raise Error {
 ///|
 pub async fn retry_job(
   engine : @engine.RedisEngine,
-  id     : String,
+  id : String,
 ) -> Unit raise Error {
   engine.retry_job(id~)
 }
@@ -239,7 +223,7 @@ pub async fn retry_job(
 ///|
 pub async fn cancel_job(
   engine : @engine.RedisEngine,
-  id     : String,
+  id : String,
 ) -> Unit raise Error {
   engine.cancel_job(id~)
 }

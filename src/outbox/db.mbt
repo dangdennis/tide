@@ -17,11 +17,11 @@ pub(all) enum DbValue {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for DbValue with output(self, logger) {
+pub impl Show for DbValue with fn output(self, logger) {
   match self {
-    Text(s)    => logger.write_string("Text(\{s})")
+    Text(s) => logger.write_string("Text(\{s})")
     Integer(n) => logger.write_string("Integer(\{n})")
-    Null       => logger.write_string("Null")
+    Null => logger.write_string("Null")
   }
 }
 
@@ -35,14 +35,14 @@ pub struct Row {
 ///|
 /// One row deserialized from tide_outbox.
 pub struct OutboxRow {
-  id           : Int64
-  queue        : String
-  worker       : String
-  args         : String
-  tags         : String    // raw JSON array string e.g. '["a","b"]'
-  priority     : Int
+  id : Int64
+  queue : String
+  worker : String
+  args : String
+  tags : String // raw JSON array string e.g. '["a","b"]'
+  priority : Int
   max_attempts : Int
-  scheduled_at : Int64?    // None = run immediately
+  scheduled_at : Int64? // None = run immediately
 } derive(Debug)
 
 ///|
@@ -54,10 +54,11 @@ pub suberror OutboxError {
 }
 
 ///|
-pub impl Show for OutboxError with output(self, logger) {
+pub impl Show for OutboxError with fn output(self, logger) {
   match self {
     DbError(msg) => logger.write_string("OutboxError::DbError(\{msg})")
-    ForwardError(msg) => logger.write_string("OutboxError::ForwardError(\{msg})")
+    ForwardError(msg) =>
+      logger.write_string("OutboxError::ForwardError(\{msg})")
   }
 }
 
@@ -72,17 +73,9 @@ pub impl Show for OutboxError with output(self, logger) {
 pub(open) trait DbConn {
   /// Execute a parameterised DML statement (INSERT / UPDATE / DELETE).
   /// Returns the number of rows affected.
-  async fn exec(
-    Self,
-    sql : String,
-    params : Array[DbValue],
-  ) -> Int raise OutboxError
+  async fn exec(Self, sql : String, params : Array[DbValue]) -> Int raise OutboxError
 
   /// Execute a parameterised SELECT.
   /// Returns all result rows.
-  async fn query_rows(
-    Self,
-    sql : String,
-    params : Array[DbValue],
-  ) -> Array[Row] raise OutboxError
+  async fn query_rows(Self, sql : String, params : Array[DbValue]) -> Array[Row] raise OutboxError
 }

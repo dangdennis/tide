@@ -47,11 +47,7 @@ async fn main {
     if processed.val % 100 == 0 {
       let now = @async.now()
       let window_ms = now - window_start.val
-      let rate = if window_ms > 0L {
-        100L * 1000L / window_ms
-      } else {
-        0L
-      }
+      let rate = if window_ms > 0L { 100L * 1000L / window_ms } else { 0L }
       println(
         "  [\{node_id}]  done: \{processed.val}  last-100: ~\{rate} jobs/s",
       )

@@ -504,9 +504,15 @@ async test "itest: cancel_jobs_by_tag cancels available tagged jobs" {
   let j3 = eng.insert_job(@job.Job::new(q, "W").with_tags(["other"]))
   let cancelled = eng.cancel_jobs_by_tag(queue=q, tag="batch")
   assert_eq(cancelled.length(), 2)
-  let pairs1 = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j1.id)) })
-  let pairs2 = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j2.id)) })
-  let pairs3 = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j3.id)) })
+  let pairs1 = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j1.id))
+  })
+  let pairs2 = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j2.id))
+  })
+  let pairs3 = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j3.id))
+  })
   assert_eq(find_field(pairs1, "state").unwrap_or(""), "cancelled")
   assert_eq(find_field(pairs2, "state").unwrap_or(""), "cancelled")
   assert_eq(find_field(pairs3, "state").unwrap_or(""), "available")
@@ -520,17 +526,23 @@ async test "itest: cancel_jobs_by_tag does not re-stamp already-discarded jobs" 
   cleanup(eng, q, [])
   eng.ensure_stream_group(queue=q)
   // Insert with max_attempts=1 so the first failure discards it.
-  let j = eng.insert_job(@job.Job::new(q, "W").with_tags(["x"]).with_max_attempts(1))
+  let j = eng.insert_job(
+    @job.Job::new(q, "W").with_tags(["x"]).with_max_attempts(1),
+  )
   let fetched = eng.fetch_jobs(queue=q, limit=1)
   assert_eq(fetched.length(), 1)
   eng.error_job(fetched[0], error_msg="boom", next_scheduled_at=None)
   // Verify it's discarded.
-  let pairs_before = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_before = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs_before, "state").unwrap_or(""), "discarded")
   // cancel_by_tag must leave the discarded state untouched.
   let cancelled = eng.cancel_jobs_by_tag(queue=q, tag="x")
   assert_eq(cancelled.length(), 0)
-  let pairs_after = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_after = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs_after, "state").unwrap_or(""), "discarded")
   cleanup(eng, q, [j.id])
 }
@@ -545,12 +557,16 @@ async test "itest: cancel_jobs_by_tag does not affect executing jobs" {
   // Fetch (transitions to Executing) but don't complete it.
   let fetched = eng.fetch_jobs(queue=q, limit=1)
   assert_eq(fetched.length(), 1)
-  let pairs_exec = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_exec = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs_exec, "state").unwrap_or(""), "executing")
   // cancel_by_tag must not touch an in-flight job.
   let cancelled = eng.cancel_jobs_by_tag(queue=q, tag="exec-tag")
   assert_eq(cancelled.length(), 0)
-  let pairs_after = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_after = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs_after, "state").unwrap_or(""), "executing")
   // Clean up PEL by completing the job.
   eng.complete_job(fetched[0])
@@ -565,14 +581,20 @@ async test "itest: retry_jobs_by_tag re-enqueues discarded jobs" {
   let eng = itest_engine()
   cleanup(eng, q, [])
   eng.ensure_stream_group(queue=q)
-  let j = eng.insert_job(@job.Job::new(q, "W").with_tags(["retry-me"]).with_max_attempts(1))
+  let j = eng.insert_job(
+    @job.Job::new(q, "W").with_tags(["retry-me"]).with_max_attempts(1),
+  )
   let fetched = eng.fetch_jobs(queue=q, limit=1)
   eng.error_job(fetched[0], error_msg="fail", next_scheduled_at=None)
-  let pairs_disc = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_disc = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs_disc, "state").unwrap_or(""), "discarded")
   let count = eng.retry_jobs_by_tag(queue=q, tag="retry-me")
   assert_eq(count, 1)
-  let pairs = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs, "state").unwrap_or(""), "available")
   cleanup(eng, q, [j.id])
 }
@@ -584,19 +606,29 @@ async test "itest: retry_jobs_by_tag resets attempt counter to 0" {
   cleanup(eng, q, [])
   eng.ensure_stream_group(queue=q)
   // max_attempts=1: after one failure it's discarded with attempt=0.
-  let j = eng.insert_job(@job.Job::new(q, "W").with_tags(["t"]).with_max_attempts(2))
+  let j = eng.insert_job(
+    @job.Job::new(q, "W").with_tags(["t"]).with_max_attempts(2),
+  )
   // Exhaust all attempts.
   let f1 = eng.fetch_jobs(queue=q, limit=1)
-  eng.error_job(f1[0], error_msg="e", next_scheduled_at=Some(@async.now() - 1000L))
+  eng.error_job(
+    f1[0],
+    error_msg="e",
+    next_scheduled_at=Some(@async.now() - 1000L),
+  )
   let _ = eng.stage_scheduled_jobs(queue=q)
   let f2 = eng.fetch_jobs(queue=q, limit=1)
   eng.error_job(f2[0], error_msg="e", next_scheduled_at=None)
-  let pairs_disc = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_disc = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs_disc, "state").unwrap_or(""), "discarded")
   // Retry — attempt must be reset to 0 so the job can be picked up and executed.
   let count = eng.retry_jobs_by_tag(queue=q, tag="t")
   assert_eq(count, 1)
-  let pairs = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   assert_eq(find_field(pairs, "state").unwrap_or(""), "available")
   assert_eq(find_field(pairs, "attempt").unwrap_or("-1"), "0")
   // The re-enqueued job can be fetched and completed without immediate discard.
@@ -613,14 +645,20 @@ async test "itest: retry_jobs_by_tag clears stale discarded_at and cancelled_at 
   let eng = itest_engine()
   cleanup(eng, q, [])
   eng.ensure_stream_group(queue=q)
-  let j = eng.insert_job(@job.Job::new(q, "W").with_tags(["ts-tag"]).with_max_attempts(1))
+  let j = eng.insert_job(
+    @job.Job::new(q, "W").with_tags(["ts-tag"]).with_max_attempts(1),
+  )
   let f = eng.fetch_jobs(queue=q, limit=1)
   eng.error_job(f[0], error_msg="e", next_scheduled_at=None)
-  let pairs_disc = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs_disc = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   // discarded_at must be non-empty before retry.
   assert_false(find_field(pairs_disc, "discarded_at").unwrap_or("").is_empty())
   let _ = eng.retry_jobs_by_tag(queue=q, tag="ts-tag")
-  let pairs = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   // After retry, discarded_at and cancelled_at must be cleared.
   assert_true(find_field(pairs, "discarded_at").unwrap_or("").is_empty())
   assert_true(find_field(pairs, "cancelled_at").unwrap_or("").is_empty())
@@ -655,7 +693,9 @@ async test "itest: reclaim_jobs skips jobs with Cancelled state" {
   let reclaimed = eng.reclaim_jobs(queue=q, rescue_after_ms=0L)
   // The job must NOT be re-enqueued — reclaimed count must be 0.
   assert_eq(reclaimed, 0)
-  let pairs = eng.pool.with_conn(async fn(conn) { conn.hgetall(job_hash_key(j.id)) })
+  let pairs = eng.pool.with_conn(async fn(conn) {
+    conn.hgetall(job_hash_key(j.id))
+  })
   // State must remain Cancelled, not be overwritten to Available.
   assert_eq(find_field(pairs, "state").unwrap_or(""), "cancelled")
   cleanup(eng, q, [j.id])

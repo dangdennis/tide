@@ -76,10 +76,7 @@ pub async fn Instance::start(config : Config) -> Instance raise TideError {
   }
   let notifier : @notifier.RedisNotifier? = if config.notify_cancel {
     Some(
-      @notifier.RedisNotifier::new(
-        redis_config,
-        "tide:notify:\{config.name}",
-      ),
+      @notifier.RedisNotifier::new(redis_config, "tide:notify:\{config.name}"),
     )
   } else {
     None
@@ -159,8 +156,13 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
           // concurrency is saturated, letting completed tasks release first.
           r.sem.acquire()
           tg.spawn_bg(allow_failure=true) <| () => {
-            defer { r.sem.release() }
-            @queue.execute(r.engine, r.workers, fetched, timeout_ms=r.timeout_ms) catch {
+            defer r.sem.release()
+            @queue.execute(
+              r.engine,
+              r.workers,
+              fetched,
+              timeout_ms=r.timeout_ms,
+            ) catch {
               _ => ()
             }
           }
@@ -245,7 +247,9 @@ pub async fn Instance::run(self : Instance) -> Unit raise TideError {
         let eng = self.engine
         let qs = self.config.queues
         tg.spawn_bg(allow_failure=true) <| () => {
-          @dashboard.serve(eng, qs, port) catch { _ => () }
+          @dashboard.serve(eng, qs, port) catch {
+            _ => ()
+          }
         }
       }
     }
@@ -275,11 +279,7 @@ pub async fn Instance::insert_unique(
   config : @job.UniqueConfig,
 ) -> @engine.UniqueInsertResult raise TideError {
   let unique_key = @job.compute_unique_key(job, config)
-  self.engine.insert_unique_job(
-    job,
-    unique_key~,
-    period_ms=config.period_ms,
-  ) catch {
+  self.engine.insert_unique_job(job, unique_key~, period_ms=config.period_ms) catch {
     e => raise TideError::EngineError("\{e}")
   }
 }
@@ -300,7 +300,9 @@ pub async fn Instance::cancel_by_tag(
   match self.notifier {
     Some(n) =>
       for id in ids {
-        n.publish_cancel(self.engine.pool, id) catch { _ => () }
+        n.publish_cancel(self.engine.pool, id) catch {
+          _ => ()
+        }
       }
     None => ()
   }

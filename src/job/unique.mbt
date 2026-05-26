@@ -29,7 +29,7 @@ pub fn UniqueConfig::with_fields(
   self : UniqueConfig,
   fields : Array[String],
 ) -> UniqueConfig {
-  { ..self, fields }
+  { ..self, fields, }
 }
 
 ///|

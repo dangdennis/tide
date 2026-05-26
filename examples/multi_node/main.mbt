@@ -72,10 +72,7 @@ async fn main {
     lifeline_rescue_after_ms: 5000L,
     workers: Map([]),
   }
-  let beta_config : @tide.Config = {
-    ..alpha_config,
-    workers: Map([]), // separate map — prevents alpha.register from affecting beta
-  }
+  let beta_config : @tide.Config = { ..alpha_config, workers: Map([]) } // separate map — prevents alpha.register from affecting beta
 
   let alpha = @tide.Instance::start(alpha_config) catch {
     e => {
@@ -132,13 +129,17 @@ async fn main {
 
   alpha.register("SlowTask", fn(job) {
     cancel_executed.val += 1
-    println("  [alpha] SlowTask \{job.id}  ← UNEXPECTED: should have been cancelled")
+    println(
+      "  [alpha] SlowTask \{job.id}  ← UNEXPECTED: should have been cancelled",
+    )
     @worker.PerformResult::Ok
   })
 
   beta.register("SlowTask", fn(job) {
     cancel_executed.val += 1
-    println("  [beta]  SlowTask \{job.id}  ← UNEXPECTED: should have been cancelled")
+    println(
+      "  [beta]  SlowTask \{job.id}  ← UNEXPECTED: should have been cancelled",
+    )
     @worker.PerformResult::Ok
   })
 
@@ -151,7 +152,9 @@ async fn main {
     // ════════════════════════════════════════════════════════════════════════
     // PROOF 1: Leader election
     // ════════════════════════════════════════════════════════════════════════
-    println("── PROOF 1: Leader election ─────────────────────────────────────")
+    println(
+      "── PROOF 1: Leader election ─────────────────────────────────────",
+    )
     //
     // RedisPeer::run() fires tick() immediately on its first iteration (no
     // leading sleep), so both nodes attempt election as soon as their peer
@@ -168,15 +171,21 @@ async fn main {
     if a_leads != b_leads {
       let leader = if a_leads { "alpha" } else { "beta" }
       let follower = if a_leads { "beta" } else { "alpha" }
-      pass("\{leader} is leader, \{follower} is follower — exactly one leader")
+      pass(
+        "\{leader} is leader, \{follower} is follower — exactly one leader",
+      )
     } else {
-      fail("both nodes report is_leader=\{a_leads}; expected exactly one leader")
+      fail(
+        "both nodes report is_leader=\{a_leads}; expected exactly one leader",
+      )
     }
 
     // ════════════════════════════════════════════════════════════════════════
     // PROOF 2: Load distribution
     // ════════════════════════════════════════════════════════════════════════
-    println("\n── PROOF 2: Load distribution ───────────────────────────────────")
+    println(
+      "\n── PROOF 2: Load distribution ───────────────────────────────────",
+    )
     //
     // Insert 20 "Task" jobs.  Both nodes' fetch loops race via XREADGROUP; the
     // per-node worker closures count completions.  The proof holds if BOTH
@@ -216,7 +225,9 @@ async fn main {
     // ════════════════════════════════════════════════════════════════════════
     // PROOF 3: Cancel-signal propagation
     // ════════════════════════════════════════════════════════════════════════
-    println("\n── PROOF 3: Cancel-signal propagation ───────────────────────────")
+    println(
+      "\n── PROOF 3: Cancel-signal propagation ───────────────────────────",
+    )
     //
     // Mechanism:
     //   cancel_by_tag (on alpha):
@@ -273,9 +284,7 @@ async fn main {
 
     println("  SlowTask executions (should be 0): \{cancel_executed.val}")
     if n_cancelled == nc && cancel_executed.val == 0 {
-      pass(
-        "all \{nc} jobs cancelled before execution; no SlowTask worker ran",
-      )
+      pass("all \{nc} jobs cancelled before execution; no SlowTask worker ran")
     } else if cancel_executed.val == 0 {
       // Partial cancel is still a win for the propagation proof.
       pass(

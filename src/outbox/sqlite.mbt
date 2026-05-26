@@ -23,12 +23,10 @@
 /// SELECT used by the relay to claim a batch of outbox rows.
 /// SQLite has no SKIP LOCKED; a single relay process is assumed.
 pub const SQLITE_CLAIM_SQL : String =
-  (
-    #|SELECT id, queue, worker, args, tags, priority, max_attempts, scheduled_at
-    #|FROM tide_outbox
-    #|ORDER BY id
-    #|LIMIT ?
-  )
+  #|SELECT id, queue, worker, args, tags, priority, max_attempts, scheduled_at
+  #|FROM tide_outbox
+  #|ORDER BY id
+  #|LIMIT ?
 
 ///|
 /// DELETE used by the relay after each row is forwarded to tide.
@@ -43,7 +41,7 @@ pub const SQLITE_DELETE_SQL : String = "DELETE FROM tide_outbox WHERE id = ?"
 /// 8 (the eight columns of the outbox SELECT).  Only matters for query_rows;
 /// exec ignores it.
 pub struct SqliteConn {
-  conn      : @sqlite3.Connection
+  conn : @sqlite3.Connection
   col_count : Int
 }
 
@@ -57,17 +55,13 @@ pub fn SqliteConn::with_col_count(
   self : SqliteConn,
   col_count : Int,
 ) -> SqliteConn {
-  { ..self, col_count }
+  { ..self, col_count, }
 }
 
 // ── DbConn implementation ─────────────────────────────────────────────────────
 
 ///|
-pub impl DbConn for SqliteConn with exec(
-  self,
-  sql,
-  params,
-) -> Int raise OutboxError {
+pub impl DbConn for SqliteConn with fn exec(self, sql, params) -> Int raise OutboxError {
   let stmt = self.conn.prepare(sql) catch {
     e => raise OutboxError::DbError("sqlite prepare: \{e}")
   }
@@ -87,11 +81,9 @@ pub impl DbConn for SqliteConn with exec(
 /// Read at most self.col_count columns per row, returning each as Text or
 /// Null.  Integer columns are coerced to their decimal text representation
 /// by SQLite; Null columns produce an empty string which we map to Null.
-pub impl DbConn for SqliteConn with query_rows(
-  self,
-  sql,
-  params,
-) -> Array[Row] raise OutboxError {
+pub impl DbConn for SqliteConn with fn query_rows(self, sql, params) -> Array[
+  Row,
+] raise OutboxError {
   let stmt = self.conn.prepare(sql) catch {
     e => raise OutboxError::DbError("sqlite prepare: \{e}")
   }
@@ -136,9 +128,9 @@ fn sqlite_bind_params(
   for i in 0..<params.length() {
     let idx = i + 1 // SQLite bind indices are 1-based
     match params[i] {
-      Text(s)    => stmt.bind(index=idx, s)
+      Text(s) => stmt.bind(index=idx, s)
       Integer(n) => stmt.bind(index=idx, n)
-      Null       => () // unbound params default to NULL in SQLite
+      Null => () // unbound params default to NULL in SQLite
     }
   }
 }

@@ -8,7 +8,7 @@ pub async fn execute(
   engine : @engine.RedisEngine,
   workers : Map[String, async (@job.Job) -> @worker.PerformResult raise Error],
   fetched : @job.FetchedJob,
-  timeout_ms~ : Int = 30000,
+  timeout_ms? : Int = 30000,
 ) -> Unit raise @engine.EngineError {
   let job = fetched.job
   let worker_fn = match workers.get(job.worker) {
@@ -18,7 +18,9 @@ pub async fn execute(
     }
     Some(f) => f
   }
-  let result = try? @async.with_timeout_opt(timeout_ms, async fn() { worker_fn(job) })
+  let result = try? @async.with_timeout_opt(timeout_ms, async fn() {
+    worker_fn(job)
+  })
   match result {
     Err(e) =>
       if job.attempt + 1 < job.max_attempts {
