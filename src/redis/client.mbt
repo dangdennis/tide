@@ -1,4 +1,9 @@
-// Redis client: one TCP connection, sends RESP2 commands, parses responses.
+// Redis client: one TCP connection that sends RESP commands and parses
+// responses. The receive buffer is binary-safe (raw bytes, not lossy-decoded
+// UTF-8) and frames are byte-accurate. Connect and non-blocking commands honour
+// configurable deadlines, and connect failures are retried with exponential
+// backoff. Blocking commands (XREADGROUP BLOCK, pub/sub reads) deliberately
+// bypass the per-command deadline.
 
 ///|
 pub struct ClientConfig {
@@ -6,11 +11,29 @@ pub struct ClientConfig {
   port : Int
   password : String?
   db : Int
+  // Robustness knobs (all have sensible defaults via `default()`):
+  connect_timeout_ms : Int // 0 disables the connect deadline
+  command_timeout_ms : Int // 0 disables the per-command deadline
+  max_retries : Int // extra connect attempts after the first
+  retry_base_delay_ms : Int // backoff base; doubles each retry
+  retry_max_delay_ms : Int // backoff cap
+  enable_resp3 : Bool // negotiate HELLO 3, falling back to RESP2
 } derive(Debug)
 
 ///|
 pub fn ClientConfig::default() -> ClientConfig {
-  { host: "127.0.0.1", port: 6379, password: None, db: 0 }
+  {
+    host: "127.0.0.1",
+    port: 6379,
+    password: None,
+    db: 0,
+    connect_timeout_ms: 5000,
+    command_timeout_ms: 5000,
+    max_retries: 2,
+    retry_base_delay_ms: 50,
+    retry_max_delay_ms: 1000,
+    enable_resp3: true,
+  }
 }
 
 ///|
@@ -47,65 +70,220 @@ pub fn ClientConfig::from_url(url : String) -> ClientConfig raise RedisError {
   } else {
     host = host_part
   }
-  { host, port, password, db }
+  // Preserve robustness defaults; only the parsed connection fields are set.
+  { ..ClientConfig::default(), host, port, password, db }
 }
 
 // A single Redis connection.
 
 ///|
 pub struct Connection {
-  socket : @socket.Tcp
+  mut socket : @socket.Tcp
   config : ClientConfig
-  mut recv_buf : String
+  mut recv : Bytes // raw, binary-safe receive buffer
+  mut recv_start : Int // cursor: bytes before this have been consumed
+  mut closed : Bool // set when the transport is known to be dead/suspect
+  mut resp3 : Bool // whether HELLO 3 was negotiated
 }
 
 ///|
-pub async fn Connection::open(
+/// Establish a TCP connection, honouring the connect deadline and retrying with
+/// exponential backoff on failure.
+async fn connect_socket(config : ClientConfig) -> @socket.Tcp raise RedisError {
+  let addr = @socket.Addr::parse("\{config.host}:\{config.port}") catch {
+    e =>
+      raise RedisError::ConnectionFailed(
+        "invalid address \{config.host}:\{config.port}: \{e}",
+      )
+  }
+  let mut attempt = 0
+  while true {
+    let result : @socket.Tcp? = try {
+      Some(connect_once(config, addr))
+    } catch {
+      err => {
+        if attempt >= config.max_retries {
+          raise err
+        }
+        None
+      }
+    }
+    match result {
+      Some(s) => return s
+      None => {
+        @async.sleep(backoff_ms(config, attempt))
+        attempt = attempt + 1
+      }
+    }
+  }
+  raise RedisError::ConnectionFailed("connect retries exhausted")
+}
+
+///|
+/// A single connect attempt: raises Timeout on deadline, ConnectionFailed on
+/// transport error.
+async fn connect_once(
   config : ClientConfig,
-) -> Connection raise RedisError {
-  let addr_str = "\{config.host}:\{config.port}"
-  let addr = @socket.Addr::parse(addr_str) catch {
-    e => raise RedisError::ConnectionFailed("invalid address \{addr_str}: \{e}")
+  addr : @socket.Addr,
+) -> @socket.Tcp raise RedisError {
+  if config.connect_timeout_ms > 0 {
+    let r = @async.with_timeout_opt(config.connect_timeout_ms, async fn() {
+      @socket.Tcp::connect(addr)
+    }) catch {
+      e =>
+        raise RedisError::ConnectionFailed(
+          "connect \{config.host}:\{config.port}: \{e}",
+        )
+    }
+    match r {
+      Some(s) => s
+      None =>
+        raise RedisError::Timeout(
+          "connect \{config.host}:\{config.port} timed out after \{config.connect_timeout_ms}ms",
+        )
+    }
+  } else {
+    @socket.Tcp::connect(addr) catch {
+      e =>
+        raise RedisError::ConnectionFailed(
+          "connect \{config.host}:\{config.port}: \{e}",
+        )
+    }
   }
-  let socket = @socket.Tcp::connect(addr) catch {
-    e => raise RedisError::ConnectionFailed("connect \{addr_str}: \{e}")
+}
+
+///|
+/// Exponential backoff delay for connect retry `attempt` (0-based), capped.
+fn backoff_ms(config : ClientConfig, attempt : Int) -> Int {
+  let mut delay = config.retry_base_delay_ms
+  let mut i = 0
+  while i < attempt {
+    delay = delay * 2
+    if delay >= config.retry_max_delay_ms {
+      return config.retry_max_delay_ms
+    }
+    i = i + 1
   }
-  let conn : Connection = { socket, config, recv_buf: "" }
-  match config.password {
+  if delay > config.retry_max_delay_ms {
+    config.retry_max_delay_ms
+  } else {
+    delay
+  }
+}
+
+///|
+pub async fn Connection::open(config : ClientConfig) -> Connection raise RedisError {
+  let socket = connect_socket(config)
+  let conn : Connection = {
+    socket,
+    config,
+    recv: b"",
+    recv_start: 0,
+    closed: false,
+    resp3: false,
+  }
+  conn.handshake()
+  conn
+}
+
+///|
+/// Run AUTH / SELECT / HELLO 3 on a freshly connected socket.
+async fn Connection::handshake(self : Connection) -> Unit raise RedisError {
+  match self.config.password {
     Some(pass) =>
-      match conn.command(["AUTH", pass]) {
+      match self.command(["AUTH", pass]) {
         SimpleErr(msg) =>
           raise RedisError::ConnectionFailed("AUTH failed: \{msg}")
         _ => ()
       }
     None => ()
   }
-  if config.db != 0 {
-    match conn.command(["SELECT", config.db.to_string()]) {
+  if self.config.db != 0 {
+    match self.command(["SELECT", self.config.db.to_string()]) {
       SimpleErr(msg) =>
-        raise RedisError::ConnectionFailed("SELECT \{config.db} failed: \{msg}")
+        raise RedisError::ConnectionFailed("SELECT \{self.config.db} failed: \{msg}")
       _ => ()
     }
   }
-  conn
+  if self.config.enable_resp3 {
+    // Negotiate RESP3; gracefully stay on RESP2 for older servers that reject
+    // or do not understand HELLO.
+    let ok = try {
+      match self.command(["HELLO", "3"]) {
+        SimpleErr(_) => false
+        _ => true
+      }
+    } catch {
+      _ => false
+    }
+    self.resp3 = ok
+  }
+}
+
+///|
+/// Reconnect this connection in place (used by the pool to heal a dead conn).
+async fn Connection::reopen(self : Connection) -> Unit raise RedisError {
+  self.socket.close()
+  self.socket = connect_socket(self.config)
+  self.recv = b""
+  self.recv_start = 0
+  self.closed = false
+  self.resp3 = false
+  self.handshake()
 }
 
 ///|
 pub fn Connection::close(self : Connection) -> Unit {
   self.socket.close()
+  self.closed = true
 }
 
-// Send a RESP2 command and receive one response.
+///|
+async fn Connection::write_frame(
+  self : Connection,
+  frame : String,
+) -> Unit raise RedisError {
+  self.socket.write(frame) catch {
+    e => {
+      self.closed = true
+      raise RedisError::IoError("write failed: \{e}")
+    }
+  }
+}
+
+// Send a RESP command and receive one response, bounded by command_timeout_ms.
 
 ///|
 pub async fn Connection::command(
   self : Connection,
   args : Array[String],
 ) -> RespValue raise RedisError {
-  let frame = encode_command(args)
-  self.socket.write(frame) catch {
-    e => raise RedisError::IoError("write failed: \{e}")
+  self.write_frame(encode_command(args))
+  let timeout = self.config.command_timeout_ms
+  if timeout <= 0 {
+    return self.recv_response()
   }
+  match @async.with_timeout_opt(timeout, async fn() { self.recv_response() }) {
+    Some(v) => v
+    None => {
+      // A partial reply may still be in flight; the connection is unusable.
+      self.closed = true
+      let name = if args.length() > 0 { args[0] } else { "?" }
+      raise RedisError::Timeout("command \{name} timed out after \{timeout}ms")
+    }
+  }
+}
+
+// Send a command without applying the per-command deadline. Use for commands
+// that legitimately block server-side (XREADGROUP BLOCK); their own BLOCK bound
+// limits how long they wait.
+
+///|
+pub async fn Connection::command_blocking(
+  self : Connection,
+  args : Array[String],
+) -> RespValue raise RedisError {
+  self.write_frame(encode_command(args))
   self.recv_response()
 }
 
@@ -120,52 +298,70 @@ pub async fn Connection::pipeline(
   for cmd in cmds {
     buf = buf + encode_command(cmd)
   }
-  self.socket.write(buf) catch {
-    e => raise RedisError::IoError("write failed: \{e}")
+  self.write_frame(buf)
+  let read_all = async fn() {
+    let results : Array[RespValue] = Array::new(capacity=cmds.length())
+    for _ in cmds {
+      results.push(self.recv_response())
+    }
+    results
   }
-  let results : Array[RespValue] = Array::new(capacity=cmds.length())
-  let mut i = 0
-  for _ in cmds {
-    proof_assert results.length() == i
-    results.push(self.recv_response())
-    i = i + 1
+  let timeout = self.config.command_timeout_ms
+  if timeout <= 0 {
+    return read_all()
   }
-  results
+  match @async.with_timeout_opt(timeout, read_all) {
+    Some(rs) => rs
+    None => {
+      self.closed = true
+      raise RedisError::Timeout("pipeline timed out after \{timeout}ms")
+    }
+  }
 }
 
-// Read bytes from the socket until we have a complete RESP2 response.
+// Read bytes from the socket until a complete RESP response is buffered.
 
 ///|
-async fn Connection::recv_response(
-  self : Connection,
-) -> RespValue raise RedisError {
+async fn Connection::recv_response(self : Connection) -> RespValue raise RedisError {
   while true {
-    if !self.recv_buf.is_empty() {
-      match try_decode(self.recv_buf) {
-        Some((value, consumed)) => {
-          self.recv_buf = self.recv_buf[consumed:].to_owned()
+    if self.recv_start < self.recv.length() {
+      let result = decode_resp_bytes(self.recv, self.recv_start) catch {
+        e => {
+          // A protocol error desynchronises the stream; mark the connection
+          // suspect so the pool discards it rather than reusing it.
+          self.closed = true
+          raise e
+        }
+      }
+      match result {
+        Complete(value, next) => {
+          self.recv_start = next
           return value
         }
-        None => ()
+        Incomplete => () // fall through and read more bytes
       }
     }
     let chunk = self.socket.read_some() catch {
-      e => raise RedisError::IoError("read failed: \{e}")
+      e => {
+        self.closed = true
+        raise RedisError::IoError("read failed: \{e}")
+      }
     }
     match chunk {
-      None => raise RedisError::IoError("connection closed by server")
-      Some(bytes) =>
-        self.recv_buf = self.recv_buf + @utf8.decode_lossy(bytes[:])
+      None => {
+        self.closed = true
+        raise RedisError::IoError("connection closed by server")
+      }
+      Some(bytes) => {
+        // Compact: keep only the unconsumed tail, then append the new chunk.
+        let buf = @buffer.from_bytes(self.recv.view(start=self.recv_start))
+        buf.write_bytes(bytes.view())
+        self.recv = buf.to_bytes()
+        self.recv_start = 0
+      }
     }
   }
   raise RedisError::IoError("unexpected recv loop exit")
-}
-
-///|
-fn try_decode(data : String) -> (RespValue, Int)? {
-  Some(decode_resp(data, 0)) catch {
-    _ => None
-  }
 }
 
 // ── Typed command helpers ──────────────────────────────────────────────────
@@ -189,7 +385,7 @@ pub async fn Connection::set_px(
   let _ = self.command(["SET", key, value, "PX", px.to_string()])
 }
 
-// SET key value NX PX ms — returns true if key was set, false if it already existed.
+// SET key value NX PX ms — returns true if key was set, false if it existed.
 
 ///|
 pub async fn Connection::set_nx_px(
@@ -354,7 +550,9 @@ pub async fn Connection::xreadgroup(
   count~ : Int,
   block_ms~ : Int,
 ) -> Array[XReadGroupEntry] raise RedisError {
-  let resp = self.command([
+  // XREADGROUP BLOCK blocks server-side for up to block_ms, which may exceed
+  // command_timeout_ms — so it goes through the deadline-free path.
+  let resp = self.command_blocking([
     "XREADGROUP",
     "GROUP",
     group,
@@ -444,10 +642,7 @@ pub async fn Connection::subscribe(
 ) -> Unit raise RedisError {
   let args : Array[String] = ["SUBSCRIBE"]
   args.append(channels)
-  let frame = encode_command(args)
-  self.socket.write(frame) catch {
-    e => raise RedisError::IoError("subscribe write: \{e}")
-  }
+  self.write_frame(encode_command(args))
   // Consume one subscription confirmation per channel.
   for _ in channels {
     let _ = self.recv_response()
@@ -471,13 +666,13 @@ pub async fn Connection::read_pub_message(
   raise RedisError::IoError("read_pub_message loop exited unexpectedly")
 }
 
-// Parse a RESP2 pub/sub push notification.
-// Returns Some((channel, data)) for "message" type; None for all other types.
+// Parse a pub/sub push notification (RESP2 array or RESP3 push frame).
+// Returns Some((channel, data)) for "message" type; None otherwise.
 
 ///|
 fn extract_pub_message(resp : RespValue) -> (String, String)? {
   match resp {
-    Array(parts) => {
+    Array(parts) | Push(parts) => {
       if parts.length() < 3 {
         return None
       }
@@ -521,7 +716,7 @@ pub async fn Connection::scan(
     count.to_string(),
   ])
   match resp {
-    Array(parts) if parts.length() == 2 => {
+    Array(parts) | Set(parts) if parts.length() == 2 => {
       let next_cursor = parts[0].as_string()
       let keys = parts[1]
         .as_array()
@@ -541,6 +736,7 @@ fn parse_xreadgroup_response(
   match resp {
     Null => []
     Array(streams) => {
+      // RESP2: [[stream_key, [[id, fields], ...]]]
       if streams.is_empty() {
         return []
       }
@@ -549,6 +745,13 @@ fn parse_xreadgroup_response(
         return []
       }
       parse_stream_entries(stream[1].as_array())
+    }
+    Map(pairs) | Push(pairs) => {
+      // RESP3: { stream_key: [[id, fields], ...] } flattened to [key, entries].
+      if pairs.length() < 2 {
+        return []
+      }
+      parse_stream_entries(pairs[1].as_array())
     }
     _ => raise RedisError::ParseError("unexpected XREADGROUP response")
   }
