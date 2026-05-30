@@ -10,6 +10,8 @@ import {
 // Values
 pub fn decode_resp(String, Int) -> (RespValue, Int) raise RedisError
 
+pub fn decode_resp_bytes(Bytes, Int) -> DecodeResult raise RedisError
+
 pub fn encode_command(Array[String]) -> String
 
 pub let move_to_stream_script : String
@@ -22,6 +24,7 @@ pub suberror RedisError {
   IoError(String)
   ParseError(String)
   CommandError(String)
+  Timeout(String)
   PoolExhausted
 }
 pub impl Show for RedisError
@@ -32,17 +35,27 @@ pub struct ClientConfig {
   port : Int
   password : String?
   db : Int
+  connect_timeout_ms : Int
+  command_timeout_ms : Int
+  max_retries : Int
+  retry_base_delay_ms : Int
+  retry_max_delay_ms : Int
+  enable_resp3 : Bool
 } derive(@debug.Debug)
 pub fn ClientConfig::default() -> Self
 pub fn ClientConfig::from_url(String) -> Self raise RedisError
 
 pub struct Connection {
-  socket : @socket.Tcp
+  mut socket : @socket.Tcp
   config : ClientConfig
-  mut recv_buf : String
+  mut recv : Bytes
+  mut recv_start : Int
+  mut closed : Bool
+  mut resp3 : Bool
 }
 pub fn Connection::close(Self) -> Unit
 pub async fn Connection::command(Self, Array[String]) -> RespValue raise RedisError
+pub async fn Connection::command_blocking(Self, Array[String]) -> RespValue raise RedisError
 pub async fn Connection::del(Self, String) -> Int64 raise RedisError
 pub async fn Connection::evalsha(Self, String, Array[String], Array[String]) -> RespValue raise RedisError
 pub async fn Connection::exists(Self, String) -> Bool raise RedisError
@@ -70,10 +83,16 @@ pub async fn Connection::zpopmin(Self, String, Int) -> Array[String] raise Redis
 pub async fn Connection::zrangebyscore(Self, String, String, String) -> Array[String] raise RedisError
 pub async fn Connection::zrem(Self, String, String) -> Int64 raise RedisError
 
+pub enum DecodeResult {
+  Complete(RespValue, Int)
+  Incomplete
+}
+
 pub struct Pool {
   config : ClientConfig
   max_size : Int
   available : @aqueue.Queue[Connection]
+  mut live : Int
 }
 pub async fn Pool::acquire(Self) -> Connection raise RedisError
 pub async fn Pool::new(ClientConfig, Int) -> Self raise RedisError
@@ -86,8 +105,16 @@ pub(all) enum RespValue {
   BulkStr(String)
   Null
   Array(Array[RespValue])
+  Double(Double)
+  Boolean(Bool)
+  BigNumber(String)
+  Map(Array[RespValue])
+  Set(Array[RespValue])
+  Push(Array[RespValue])
 } derive(Eq, @debug.Debug)
 pub fn RespValue::as_array(Self) -> Array[Self] raise RedisError
+pub fn RespValue::as_bool(Self) -> Bool raise RedisError
+pub fn RespValue::as_double(Self) -> Double raise RedisError
 pub fn RespValue::as_int(Self) -> Int64 raise RedisError
 pub fn RespValue::as_string(Self) -> String raise RedisError
 pub fn RespValue::is_null(Self) -> Bool
@@ -107,4 +134,3 @@ pub struct XReadGroupEntry {
 // Type aliases
 
 // Traits
-
