@@ -129,7 +129,7 @@ pub async fn RedisNotifier::listen(
     })
     match result {
       Ok(None) => () // timeout; loop and re-check is_stopped
-      Ok(Some((_, job_id))) => self.cancelled.val[job_id] = true
+      Ok(Some((_, job_id))) => self.mark_cancelled(job_id)
       Err(_) => break // connection error; exit
     }
   }

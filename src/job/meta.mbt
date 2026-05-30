@@ -111,7 +111,7 @@ fn skip_json_value(s : String, start : Int) -> Int {
   if s[start] == '"' {
     let mut i = start + 1
     while i < len {
-      if s[i] == '\\' {
+      if s[i] == '\\' && i + 1 < len {
         i = i + 2
       } else if s[i] == '"' {
         return i + 1
