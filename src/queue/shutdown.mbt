@@ -18,10 +18,11 @@ pub fn ShutdownSignal::new() -> ShutdownSignal {
 
 ///|
 pub async fn ShutdownSignal::wait(self : ShutdownSignal) -> Unit {
-  if !self.stopped.val {
+  // Guarded wait: re-check the flag after each wakeup so a spurious wakeup
+  // (one not caused by send()) does not return early or mark us stopped.
+  while !self.stopped.val {
     self.cond.wait()
   }
-  self.stopped.val = true
 }
 
 // Non-blocking. May be called from non-async contexts (e.g. signal handlers).
