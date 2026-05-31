@@ -53,7 +53,7 @@ async fn main {
       )
       window_start.val = now
     }
-    @worker.PerformResult::Ok
+    @tide_worker.PerformResult::Ok
   })
 
   println("worker ready — waiting for jobs …")

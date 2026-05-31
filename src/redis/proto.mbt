@@ -154,7 +154,9 @@ fn decode_bulk(
           } else {
             // Verbatim strings carry a 4-byte "txt:"/"mkd:" prefix we strip.
             let body_start = if verbatim && len >= 4 { next + 4 } else { next }
-            let value = @utf8.decode_lossy(data.view(start=body_start, end=next + len))
+            let value = @utf8.decode_lossy(
+              data.view(start=body_start, end=next + len),
+            )
             Complete(BulkStr(value), next + len + 2)
           }
         None => raise RedisError::ParseError("invalid bulk length: \{s}")
@@ -243,7 +245,7 @@ fn read_line_bytes(data : Bytes, start : Int) -> (String, Int)? {
   let mut i = start
   while i + 1 < n {
     if data.at(i) == b'\r' && data.at(i + 1) == b'\n' {
-      return Some((@utf8.decode_lossy(data.view(start=start, end=i)), i + 2))
+      return Some((@utf8.decode_lossy(data.view(start~, end=i)), i + 2))
     }
     i = i + 1
   }
@@ -254,10 +256,14 @@ fn read_line_bytes(data : Bytes, start : Int) -> (String, Int)? {
 /// Backwards-compatible String-based decode used by existing tests and callers.
 /// Encodes the input to UTF-8 bytes and adapts `Incomplete` into a ParseError,
 /// preserving the original "raise on a partial/empty frame" behaviour.
-pub fn decode_resp(data : String, pos : Int) -> (RespValue, Int) raise RedisError {
+pub fn decode_resp(
+  data : String,
+  pos : Int,
+) -> (RespValue, Int) raise RedisError {
   match decode_resp_bytes(@utf8.encode(data), pos) {
     Complete(v, next) => (v, next)
-    Incomplete => raise RedisError::ParseError("incomplete RESP frame at pos \{pos}")
+    Incomplete =>
+      raise RedisError::ParseError("incomplete RESP frame at pos \{pos}")
   }
 }
 

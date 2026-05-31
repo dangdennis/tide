@@ -1,6 +1,6 @@
 import {
   "dangdennis/tide/src/tide",
-  "dangdennis/tide/src/worker",
+  "dangdennis/tide/src/worker" @tide_worker,
   "moonbitlang/async",
 }
 

@@ -8,6 +8,7 @@
 //   4. outbox_row_to_job produces a Job with the expected fields.
 
 // DDL for the test database (minimal, no indexes needed for tests).
+
 ///|
 let test_ddl : String =
   #|CREATE TABLE IF NOT EXISTS tide_outbox (

@@ -98,9 +98,7 @@ async fn connect_socket(config : ClientConfig) -> @socket.Tcp raise RedisError {
   }
   let mut attempt = 0
   while true {
-    let result : @socket.Tcp? = try {
-      Some(connect_once(config, addr))
-    } catch {
+    let result : @socket.Tcp? = Some(connect_once(config, addr)) catch {
       err => {
         if attempt >= config.max_retries {
           raise err
@@ -111,7 +109,9 @@ async fn connect_socket(config : ClientConfig) -> @socket.Tcp raise RedisError {
     match result {
       Some(s) => return s
       None => {
-        @async.sleep(backoff_ms(config, attempt))
+        @async.sleep(backoff_ms(config, attempt)) catch {
+          _ => ()
+        }
         attempt = attempt + 1
       }
     }
@@ -172,7 +172,9 @@ fn backoff_ms(config : ClientConfig, attempt : Int) -> Int {
 }
 
 ///|
-pub async fn Connection::open(config : ClientConfig) -> Connection raise RedisError {
+pub async fn Connection::open(
+  config : ClientConfig,
+) -> Connection raise RedisError {
   let socket = connect_socket(config)
   let conn : Connection = {
     socket,
@@ -201,7 +203,9 @@ async fn Connection::handshake(self : Connection) -> Unit raise RedisError {
   if self.config.db != 0 {
     match self.command(["SELECT", self.config.db.to_string()]) {
       SimpleErr(msg) =>
-        raise RedisError::ConnectionFailed("SELECT \{self.config.db} failed: \{msg}")
+        raise RedisError::ConnectionFailed(
+          "SELECT \{self.config.db} failed: \{msg}",
+        )
       _ => ()
     }
   }
@@ -263,7 +267,10 @@ pub async fn Connection::command(
   if timeout <= 0 {
     return self.recv_response()
   }
-  match @async.with_timeout_opt(timeout, async fn() { self.recv_response() }) {
+  let r = @async.with_timeout_opt(timeout, async fn() { self.recv_response() }) catch {
+    e => raise RedisError::IoError("\{e}")
+  }
+  match r {
     Some(v) => v
     None => {
       // A partial reply may still be in flight; the connection is unusable.
@@ -308,9 +315,12 @@ pub async fn Connection::pipeline(
   }
   let timeout = self.config.command_timeout_ms
   if timeout <= 0 {
-    return read_all()
+    return read_all() catch { e => raise RedisError::IoError("\{e}") }
   }
-  match @async.with_timeout_opt(timeout, read_all) {
+  let r = @async.with_timeout_opt(timeout, read_all) catch {
+    e => raise RedisError::IoError("\{e}")
+  }
+  match r {
     Some(rs) => rs
     None => {
       self.closed = true
@@ -322,7 +332,9 @@ pub async fn Connection::pipeline(
 // Read bytes from the socket until a complete RESP response is buffered.
 
 ///|
-async fn Connection::recv_response(self : Connection) -> RespValue raise RedisError {
+async fn Connection::recv_response(
+  self : Connection,
+) -> RespValue raise RedisError {
   while true {
     if self.recv_start < self.recv.length() {
       let result = decode_resp_bytes(self.recv, self.recv_start) catch {

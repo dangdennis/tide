@@ -96,7 +96,9 @@ pub fn RespValue::as_int(self : RespValue) -> Int64 raise RedisError {
 }
 
 ///|
-pub fn RespValue::as_array(self : RespValue) -> Array[RespValue] raise RedisError {
+pub fn RespValue::as_array(
+  self : RespValue,
+) -> Array[RespValue] raise RedisError {
   match self {
     // RESP3 maps/sets/pushes carry their elements the same way arrays do, so
     // commands like HGETALL keep working whether the server replies with '*'
@@ -114,7 +116,8 @@ pub fn RespValue::as_bool(self : RespValue) -> Bool raise RedisError {
     Boolean(b) => b
     Integer(n) => n != 0L
     SimpleErr(e) => raise RedisError::CommandError(e)
-    _ => raise RedisError::ParseError("expected boolean, got incompatible value")
+    _ =>
+      raise RedisError::ParseError("expected boolean, got incompatible value")
   }
 }
 

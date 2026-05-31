@@ -14,7 +14,10 @@ pub struct Pool {
 }
 
 ///|
-pub async fn Pool::new(config : ClientConfig, size : Int) -> Pool raise RedisError {
+pub async fn Pool::new(
+  config : ClientConfig,
+  size : Int,
+) -> Pool raise RedisError {
   let available : @async.Queue[Connection] = @async.Queue(
     kind=@aqueue.Blocking(size),
   )
@@ -40,11 +43,7 @@ pub async fn Pool::new(config : ClientConfig, size : Int) -> Pool raise RedisErr
 ///|
 pub async fn Pool::acquire(self : Pool) -> Connection raise RedisError {
   // 1. Reuse an idle connection if one is ready.
-  let idle = try {
-    self.available.try_get()
-  } catch {
-    _ => None
-  }
+  let idle = self.available.try_get() catch { _ => None }
   match idle {
     Some(conn) => return self.ensure_open(conn)
     None => ()
@@ -61,9 +60,7 @@ pub async fn Pool::acquire(self : Pool) -> Connection raise RedisError {
     }
   }
   // 3. At capacity: wait for a returned connection.
-  let conn = self.available.get() catch {
-    _ => raise RedisError::PoolExhausted
-  }
+  let conn = self.available.get() catch { _ => raise RedisError::PoolExhausted }
   self.ensure_open(conn)
 }
 

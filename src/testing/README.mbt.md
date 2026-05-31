@@ -36,7 +36,7 @@ async test {
   let workers : Map[
     String,
     async (@job.Job) -> @worker.PerformResult raise Error,
-  ] = { "MyWorker": async fn(_job) { @worker.PerformResult::Ok } }
+  ] = { "MyWorker": fn(_job) { @worker.PerformResult::Ok } }
 
   let count = @testing.drain_queue(eng, workers, "default")
   inspect(count, content="2")
@@ -54,7 +54,7 @@ async test {
   let workers : Map[
     String,
     async (@job.Job) -> @worker.PerformResult raise Error,
-  ] = { "EchoWorker": async fn(_job) { @worker.PerformResult::Ok } }
+  ] = { "EchoWorker": fn(_job) { @worker.PerformResult::Ok } }
   let job = @job.Job::new("default", "EchoWorker")
   let result = @testing.perform_inline(workers, job)
   match result {

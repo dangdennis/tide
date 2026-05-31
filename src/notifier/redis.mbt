@@ -26,6 +26,7 @@
 // Max number of cancelled job IDs held in memory.  When this limit is reached,
 // the oldest half are evicted.  Cancel signals are best-effort; eviction only
 // affects jobs cancelled long before the cap was hit.
+
 ///|
 let max_cancelled = 10000
 

@@ -135,7 +135,7 @@ async test "perform_inline: calls worker and returns result" {
   let workers : Map[
     String,
     async (@job.Job) -> @worker.PerformResult raise Error,
-  ] = Map([("EchoWorker", async fn(_job) { @worker.PerformResult::Ok })])
+  ] = Map([("EchoWorker", fn(_job) { @worker.PerformResult::Ok })])
   let job = @job.Job::new("q", "EchoWorker")
   let result = perform_inline(workers, job)
   match result {
@@ -166,7 +166,7 @@ async test "drain_queue: runs all available jobs" {
   let workers : Map[
     String,
     async (@job.Job) -> @worker.PerformResult raise Error,
-  ] = Map([("W", async fn(_job) { @worker.PerformResult::Ok })])
+  ] = Map([("W", fn(_job) { @worker.PerformResult::Ok })])
   let count = drain_queue(eng, workers, "q")
   assert_eq(count, 2)
   assert_eq(eng.jobs_in_state(@job.Completed).length(), 2)
