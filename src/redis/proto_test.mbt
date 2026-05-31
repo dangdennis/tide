@@ -220,3 +220,13 @@ test "decode stays in bounds: next_pos <= data length" {
   let (_, next) = decode_resp(data, 0)
   assert_true(next <= data.length())
 }
+
+///|
+test "encode uses UTF-8 byte length for non-ASCII args" {
+  // "café" = 5 UTF-8 bytes (not 4 chars); "€5" = 4 bytes (not 2 chars).
+  // A char-count encoder would produce $4 and $2 respectively.
+  assert_eq(
+    encode_command(["SET", "café", "€5"]),
+    "*3\r\n$3\r\nSET\r\n$5\r\ncafé\r\n$4\r\n€5\r\n",
+  )
+}

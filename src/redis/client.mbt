@@ -499,10 +499,23 @@ pub async fn Connection::zpopmin(
   key : String,
   count : Int,
 ) -> Array[String] raise RedisError {
-  self
-  .command(["ZPOPMIN", key, count.to_string()])
-  .as_array()
-  .map(fn(v) { v.as_string() catch { _ => "" } })
+  let arr = self.command(["ZPOPMIN", key, count.to_string()]).as_array()
+  if arr.is_empty() {
+    return []
+  }
+  // RESP3 wraps each (member, score) pair in a nested array; RESP2 is flat.
+  match arr[0] {
+    Array(_) | Push(_) => {
+      let result : Array[String] = Array::new(capacity=arr.length() * 2)
+      for item in arr {
+        for v in item.as_array() {
+          result.push(v.as_string() catch { _ => "" })
+        }
+      }
+      result
+    }
+    _ => arr.map(fn(v) { v.as_string() catch { _ => "" } })
+  }
 }
 
 ///|

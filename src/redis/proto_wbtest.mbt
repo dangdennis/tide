@@ -123,3 +123,42 @@ test "decode_resp String shim still raises on truncated bulk" {
   }
   assert_true(raised)
 }
+
+// ── backoff_ms ────────────────────────────────────────────────────────────────
+
+///|
+test "backoff_ms: attempt 0 returns base delay" {
+  let config = ClientConfig::default() // retry_base_delay_ms=50, retry_max_delay_ms=1000
+  assert_eq(backoff_ms(config, 0), 50)
+}
+
+///|
+test "backoff_ms: attempt 1 doubles the base" {
+  let config = ClientConfig::default()
+  assert_eq(backoff_ms(config, 1), 100)
+}
+
+///|
+test "backoff_ms: attempt 2 doubles again" {
+  let config = ClientConfig::default()
+  assert_eq(backoff_ms(config, 2), 200)
+}
+
+///|
+test "backoff_ms: attempt 5 is capped at retry_max_delay_ms" {
+  let config = ClientConfig::default() // cap = 1000
+  assert_eq(backoff_ms(config, 5), 1000)
+}
+
+///|
+test "backoff_ms: custom config uses its own base and cap" {
+  let config = {
+    ..ClientConfig::default(),
+    retry_base_delay_ms: 100,
+    retry_max_delay_ms: 400,
+  }
+  assert_eq(backoff_ms(config, 0), 100) // base
+  assert_eq(backoff_ms(config, 1), 200) // 100 * 2
+  assert_eq(backoff_ms(config, 2), 400) // capped
+  assert_eq(backoff_ms(config, 5), 400) // still capped
+}

@@ -40,3 +40,23 @@ async test "RedisPeer is_leader reflects the internal Ref" {
   peer.leader.val = true
   assert_true(peer.is_leader())
 }
+
+///|
+async test "RedisPeer becomes leader after tick against live Redis" {
+  let config = @redis.ClientConfig::from_url("redis://127.0.0.1:6379") catch {
+    _ => return
+  }
+  let pool = @redis.Pool::new(config, 1) catch { _ => return }
+  let peer = RedisPeer::new(pool, "test-peer-election", "node-test-1")
+  let key = peer.election_key()
+  // Clean up any leftover election key from a previous run.
+  pool.with_conn(async fn(conn) { let _ = conn.del(key) }) catch {
+    _ => ()
+  }
+  peer.tick()
+  assert_true(peer.is_leader())
+  // Clean up so re-runs start fresh.
+  pool.with_conn(async fn(conn) { let _ = conn.del(key) }) catch {
+    _ => ()
+  }
+}
